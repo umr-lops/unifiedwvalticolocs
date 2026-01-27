@@ -1289,9 +1289,7 @@ def core_coloc(
         logging.info("no SAR WV data for %s", startdate)
     return cpt
 
-
-if __name__ == "__main__":
-
+def entrypoint():
     tinit = time.time()
     root = logging.getLogger()
     if root.handlers:
@@ -1357,3 +1355,6 @@ if __name__ == "__main__":
     logging.info("counters: %s", cpt)
     logging.info("analysis done in %1.1f sec", time.time() - t1)
     logging.info("end.")
+if __name__ == "__main__":
+    entrypoint()
+

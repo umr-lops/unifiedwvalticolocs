@@ -14,7 +14,7 @@ repository = "https://github.com/umr-lops/unifiedwvalticolocs"
 homepage = "https://github.com/umr-lops/unifiedwvalticolocs"
 
 # Keywords description https://python-poetry.org/docs/pyproject/#keywords
-keywords = []  #! Update me
+keywords = ["colocation","sentinel1","altimeters","CMEMS","Level-2","ocean","SWH","WV"] 
 
 # Pypi classifiers: https://pypi.org/classifiers/
 classifiers = [  #! Update me
@@ -36,10 +36,10 @@ pandas = '3.0.0'
 tqdm = "4.67.1"
 netcdf4 = "1.7.4"
 scipy = "1.17.0"
-s1ifr = "2026.1.13"
+# s1ifr = "2026.1.13"
 
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 bandit = "^1.7.1"
 black = {version = "^21.10b0", allow-prereleases = true}
 darglint = "^1.8.1"
@@ -94,7 +94,7 @@ color_output = true
 
 [tool.mypy]
 # https://mypy.readthedocs.io/en/latest/config_file.html#using-a-pyproject-toml-file
-python_version = 3.9
+python_version = "3.9"
 pretty = true
 show_traceback = true
 color_output = true
@@ -135,13 +135,14 @@ addopts = [
 
 [tool.coverage.run]
 source = ["tests"]
-
-[coverage.paths]
-source = "unifiedwvalticolocs"
-
-[coverage.run]
 branch = true
 
-[coverage.report]
+[tool.coverage.paths]
+source = "unifiedwvalticolocs"
+
+[tool.coverage.report]
 fail_under = 50
 show_missing = true
+
+[tool.poetry.scripts]
+unifiedwvalticolocs = "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci:entrypoint"
