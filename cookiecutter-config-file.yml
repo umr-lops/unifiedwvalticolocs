@@ -1,0 +1,13 @@
+# This file contains values from Cookiecutter
+
+default_context:
+  project_name: "unifiedwvalticolocs"
+  project_description: "lib python to generate colocs S1 WV with CMEMS or CCI seatstate altimeters"
+  organization: "umr-lops"
+  license: "MIT"
+  minimal_python_version: 3.9
+  github_name: "agrouaze"
+  email: "antoine.grouazel@ifremer.fr"
+  version: "2026.1.27"
+  line_length: "88"
+  create_example_template: "none"
