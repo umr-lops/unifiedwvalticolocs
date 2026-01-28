@@ -1173,8 +1173,7 @@ def core_coloc(
     time.sleep(rng.integers(0, 10))
     os.makedirs(os.path.dirname(output_nc_file), 0o0775, exist_ok=True)
     if os.path.exists(output_nc_file) and redo is False:
-        logging.info("output coloc S1-WV alti file already exists\
-                      (redo is False)")
+        logging.info("output coloc S1-WV alti file already exists (redo is False)")
         sys.exit(0)
 
     coloc_listing = {}
