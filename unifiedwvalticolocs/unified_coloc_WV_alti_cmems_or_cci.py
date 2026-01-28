@@ -4,37 +4,38 @@ Antoine Grouazel
 inspired from Gabriel Morand work and tuned for CCI WV v3.2 fot
 Script to create a NetCDF with colocation data's from Jason-3 ALT and CCI SAR v3.0 dataset
 """
-import netCDF4
+
+import argparse
+import copy
+import datetime
+import glob
+import logging
 import os
 import sys
-import copy
-import numpy as np
-import xarray as xr
-from tqdm import tqdm
-import glob
-import pandas as pd
-import datetime
-from datetime import timezone
 import time
-import logging
+import warnings
 from collections import defaultdict
-import argparse
-from scipy.spatial import KDTree
+from datetime import timezone
+from resource import RUSAGE_SELF, getrusage
+
+import netCDF4
+import numpy as np
+import pandas as pd
+import xarray as xr
 from dateutil import rrule
-from resource import getrusage, RUSAGE_SELF
 from s1ifr.get_full_path_from_measurement import (
     get_full_path_ocn_wv_from_approximate_date,
 )
-import warnings
+from scipy.spatial import KDTree
+from tqdm import tqdm
+
 warnings.filterwarnings(
     "ignore",
     message="invalid value encountered in scalar divide",
-    category=RuntimeWarning
+    category=RuntimeWarning,
 )
 warnings.filterwarnings(
-    "ignore",
-    message="invalid value encountered in divide",
-    category=RuntimeWarning
+    "ignore", message="invalid value encountered in divide", category=RuntimeWarning
 )
 warnings.filterwarnings(action="ignore", message="Mean of empty slice")
 warnings.filterwarnings(
@@ -45,14 +46,14 @@ warnings.filterwarnings(action="ignore", message="Degrees of freedom <= 0 for sl
 # sys.path.append("/home1/datahome/satwave/sources_en_exploitation2/cfosat-calval-exe/")
 # Input = '/home/datawork-cersat-public/project/cci-seastate/sandbox/data/sar/v3.0/S1A_wv1/2021/001/S1A_wv1_20210101_level2_LOPS_SWH_SAR_v3.0.nc'
 # path_SAR = '/home/datawork-cersat-public/project/cci-seastate/sandbox/data/sar/v3.0/'
-#path_SAR = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/analysis/s1_data_analysis/hs_nn/cci_orbit_files/v3.2"
+# path_SAR = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/analysis/s1_data_analysis/hs_nn/cci_orbit_files/v3.2"
 path_SAR = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/data/esa/"
 # path = '/home/ref-cmems-public/tac/wave/WAVE_GLO_WAV_L3_SWH_NRT_OBSERVATIONS_014_001/dataset-wav-alti-l3-swh-rt-global-j3/'
 # path_alt = '/home/ref-cmems-public/tac/wave/WAVE_GLO_WAV_L3_SWH_NRT_OBSERVATIONS_014_001/dataset-wav-alti-l3-swh-rt-global-%s'
 PATH_ALT = {
     "cmems": "/home/ref-cmems-public/tac/wave/WAVE_GLO_PHY_SWH_L3_NRT_014_001/cmems_obs-wave_glo_phy-swh_nrt_%s-l3_PT1S",
     # "cci": "/home/datawork-cersat-public/provider/cci_seastate/products/v3/", # v3
-    "cci": "/home/ref-cersat-public/ocean-waves/cci-seastate/v4/", #v4 followed by v4/data/satellite/altimeter/l2p/
+    "cci": "/home/ref-cersat-public/ocean-waves/cci-seastate/v4/",  # v4 followed by v4/data/satellite/altimeter/l2p/
 }
 # DIR_OUTPUT = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/analysis/s1_data_analysis/hs_nn/cci_orbit_files/v3.2_colocations_unified_v1/"  # oct 2023
 DIR_OUTPUT = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/analysis/s1_data_analysis/hs_nn/unified_colocs_wv_alti"
@@ -84,7 +85,7 @@ POSSIBLES_CMEMS_ALTI = {
     "HY2B": "h2b",
     "HY2C": "h2c",
     "Sentinel-6A": "s6a",
-    "SWOT-Nadir": "swon"
+    "SWOT-Nadir": "swon",
 }
 
 
@@ -95,6 +96,7 @@ POSSIBLES_CMEMS_ALTI = {
 #     dt = datetime.datetime.utcfromtimestamp(ts)
 
 #     return dt
+
 
 def from_npdt64_to_dt(dt64):
     # Convertir le numpy.datetime64 en timestamp (secondes depuis epoch)
@@ -168,7 +170,9 @@ def Step_1_temp_match_cci(date_SAR_dt, DELTA_T_SAT, path_altimeters, acro_alti):
     return final_list_alti
 
 
-def Step_1_temp_match(date_SAR_dt, DELTA_T_SAT, path_altimeters, acro_alti, altidb)->str:
+def Step_1_temp_match(
+    date_SAR_dt, DELTA_T_SAT, path_altimeters, acro_alti, altidb
+) -> str:
     """
 
     wrapper to handle both cmems and cci altimeter database
@@ -212,7 +216,6 @@ def Step_1_temp_match_cmems(date_SAR_dt, DELTA_T_SAT, path_altimeters, acro_alti
         days=1
     )  # I take a margin of 1 day to miss no files in the following rrule.rrule
     sto = stop + datetime.timedelta(days=1)
-    
 
     # If sta and sto are naive, make them aware (assuming UTC)
     sta = sta.replace(tzinfo=timezone.utc)
@@ -223,7 +226,7 @@ def Step_1_temp_match_cmems(date_SAR_dt, DELTA_T_SAT, path_altimeters, acro_alti
             path_altimeters,
             dd.strftime("%Y"),
             dd.strftime("%m"),
-            "global_vavh_l3_rt_%s_%sT*.nc" % (acro_alti, dd.strftime("%Y%m%d")),
+            "global_vavh_l3_rt_{}_{}T*.nc".format(acro_alti, dd.strftime("%Y%m%d")),
         )
         ALT_DATA += sorted(
             glob.glob(path_glob)
@@ -315,7 +318,7 @@ def preproc_cciseastate_alti_files(ds):
 def read_all_alti_files(liste_altimeter_files, altidatabase):
     """
     read the altimeter files to get a xr.Dataset
-    
+
     """
     if altidatabase == "cci":
         lon_varname = "lon"
@@ -347,7 +350,7 @@ def read_all_alti_files(liste_altimeter_files, altidatabase):
     subset_alti1 = ds_alti.where(np.isfinite(ds_alti[lon_varname]), drop=True)
     points_ALT = np.c_[ds_alti[lat_varname], ds_alti[lon_varname]]
     tree_ALT = KDTree(points_ALT)
-    logging.debug('alti files loaded, number of points: %s', len(subset_alti1['time']))
+    logging.debug("alti files loaded, number of points: %s", len(subset_alti1["time"]))
     return subset_alti1, tree_ALT
 
 
@@ -419,7 +422,7 @@ def step_3_closer_temp_match(
     find the altimeter points that are within the time window around SAr acquisition.
 
     Args:
-        SARdataset (xarray.Dataset):  WV 
+        SARdataset (xarray.Dataset):  WV
         subset_alti (xarray.Dataset):  subset of the initial ALTI dataset (only points selected at geographic match)
         date_SAR_dt (datetime):  SAR acquisition time  ( utf datetime )
         DELTA_T_SAT_SHORT (int): time windows range (int in hour), e.g. co-locations are within +/-DELTA_T_SAT_SHORT
@@ -505,9 +508,9 @@ def step_3_closer_temp_match(
         closest_lat_alti = lat_alti[ind_closest_in_dist]
         closest_time = list_alti_pts_matching_space_and_time[ind_closest_in_dist]
         date_SAR_dt_naive = date_SAR_dt.replace(tzinfo=None)
-        DELTA_T_closest = (
-            closest_time - np.datetime64(date_SAR_dt_naive)
-        ).astype("timedelta64[s]")
+        DELTA_T_closest = (closest_time - np.datetime64(date_SAR_dt_naive)).astype(
+            "timedelta64[s]"
+        )
         # DELTA_T_closest = (closest_time - np.datetime64(date_SAR_dt)).astype("<m8[s]") # drop silently the tz -> warning raised
         list_alti_files_timespace_match = np.unique(subset_alti["fname"])
     return (
@@ -547,8 +550,7 @@ def haversine(lon1, lat1, lon2, lat2):
     return c * r
 
 
-def save_coloc_netCDF_file(
-    ds_colocations, output_nc_file):
+def save_coloc_netCDF_file(ds_colocations, output_nc_file):
     """
 
     :param ds_colocations: xarray dataset
@@ -560,13 +562,15 @@ def save_coloc_netCDF_file(
         if len(ds_colocations["oswLon"]) > 0:
             logging.info("start writting netCDF")
             ds = xr.Dataset()
-            ds["lat_SAR"] = ds_colocations["oswLat"].assign_attrs({
+            ds["lat_SAR"] = ds_colocations["oswLat"].assign_attrs(
+                {
                     "units": "degrees_north",
                     "long_name": "SAR latitude",
                     "standard_name": "latitude",
                     "valid_min": -90.0,
                     "valid_max": 90.0,
-                })
+                }
+            )
             # ds["lat_SAR"] = xr.DataArray(
             #     data=ds_colocations["oswLat"].values,  # enter data here
             #     dims=["time_sar"],
@@ -579,13 +583,15 @@ def save_coloc_netCDF_file(
             #         "vmax": "90",
             #     },
             # )
-            ds["lon_SAR"] = ds_colocations["oswLon"].assign_attrs({
-                "units": "degrees_east",
-                "long_name": "SAR longitude",
-                "standard_name": "longitude",
-                "valid_min": -180.0,
-                "valid_max": 180.0,
-            })
+            ds["lon_SAR"] = ds_colocations["oswLon"].assign_attrs(
+                {
+                    "units": "degrees_east",
+                    "long_name": "SAR longitude",
+                    "standard_name": "longitude",
+                    "valid_min": -180.0,
+                    "valid_max": 180.0,
+                }
+            )
             # ds["lon_SAR"] = xr.DataArray(
             #     data=ds_colocations["oswLon"].values,  # enter data here
             #     dims=["time_sar"],
@@ -634,13 +640,15 @@ def save_coloc_netCDF_file(
                     "vmax": "180",
                 },
             )
-            ds["angle_of_incidence"] = ds_colocations["oswIncidenceAngle"].assign_attrs({
-                "units": "degrees",
-                "long_name": "SAR incidence angle",
-                "standard_name": "incidence_angle",
-                "valid_min": -22.0,
-                "valid_max": 38.0,
-            })
+            ds["angle_of_incidence"] = ds_colocations["oswIncidenceAngle"].assign_attrs(
+                {
+                    "units": "degrees",
+                    "long_name": "SAR incidence angle",
+                    "standard_name": "incidence_angle",
+                    "valid_min": -22.0,
+                    "valid_max": 38.0,
+                }
+            )
             # ds["angle_of_incidence"] = xr.DataArray(
             #     data=ds_colocations["oswIncidenceAngle"].values,  # enter data here
             #     dims=["time_sar"],
@@ -653,13 +661,15 @@ def save_coloc_netCDF_file(
             #         "vmax": "38",
             #     },
             # )
-            ds["heading"] = ds_colocations["oswHeading"].assign_attrs({
-                "units": "degrees",
-                "long_name": "SAR heading angle",
-                "standard_name": "platform_heading",
-                "valid_min": -180.0,
-                "valid_max": 360.0,
-            })
+            ds["heading"] = ds_colocations["oswHeading"].assign_attrs(
+                {
+                    "units": "degrees",
+                    "long_name": "SAR heading angle",
+                    "standard_name": "platform_heading",
+                    "valid_min": -180.0,
+                    "valid_max": 360.0,
+                }
+            )
             # ds["heading"] = xr.DataArray(
             #     data=ds_colocations["oswHeading"].values,  # enter data here
             #     dims=["time_sar"],
@@ -688,18 +698,20 @@ def save_coloc_netCDF_file(
             #         "source": "CCI Sea state IFREMER SAR S1 WV dataset",
             #     },
             # )
-            ds["oswTotalHs"] = ds_colocations["oswTotalHs"].assign_attrs({
-                "units": "m",
-                "description": "SAR Sentinel-1 WV C-band significant wave height",
-                "standard_name": "sea_surface_wave_significant_height",
-                "vmax": "30",
-                "vmin": "0",
-                "coverage_content_type": "physicalMeasurement",
-                "ancillary_variables": "oswTotalHsStdev",
-                "band": "C",
-                "algo": "Quach et al 2020",
-                "info": "comes from ESA S-1 WV L2 OCN oswTotalHs variable, and is comparable to variable swh of present product",
-            })
+            ds["oswTotalHs"] = ds_colocations["oswTotalHs"].assign_attrs(
+                {
+                    "units": "m",
+                    "description": "SAR Sentinel-1 WV C-band significant wave height",
+                    "standard_name": "sea_surface_wave_significant_height",
+                    "vmax": "30",
+                    "vmin": "0",
+                    "coverage_content_type": "physicalMeasurement",
+                    "ancillary_variables": "oswTotalHsStdev",
+                    "band": "C",
+                    "algo": "Quach et al 2020",
+                    "info": "comes from ESA S-1 WV L2 OCN oswTotalHs variable, and is comparable to variable swh of present product",
+                }
+            )
             # ds["oswTotalHs"] = xr.DataArray(
             #     data=ds_colocations["oswTotalHs"].values,
             #     dims=["time_sar"],
@@ -964,28 +976,60 @@ def preprocess_wv_s1_ocn(ds):
     # osw_heavy_vars = ['oswCartSpecRe','oswCartSpecIm','oswPolSpec',
     #                   'oswPolSpecNV','oswPartitions','oswQualityCrossSpectraRe','oswQualityCrossSpectraIm',
     #                   "oswK",'oswPhi','oswSpecRes',]
-    to_keep_vars = ['oswLon','oswLat','oswIncidenceAngle','oswHeading','oswPhs0','oswWaveAge','oswDepth',
-                    'oswTotalHs','oswTotalHsStdev','oswWindSpeed','oswNrcs','oswEcmwfWindSpeed','oswNlWidth','oswLandFlag',
-                    'oswLandCoverage','oswQualityFlag','oswAzSizeSLC',]
+    to_keep_vars = [
+        "oswLon",
+        "oswLat",
+        "oswIncidenceAngle",
+        "oswHeading",
+        "oswPhs0",
+        "oswWaveAge",
+        "oswDepth",
+        "oswTotalHs",
+        "oswTotalHsStdev",
+        "oswWindSpeed",
+        "oswNrcs",
+        "oswEcmwfWindSpeed",
+        "oswNlWidth",
+        "oswLandFlag",
+        "oswLandCoverage",
+        "oswQualityFlag",
+        "oswAzSizeSLC",
+    ]
     # ds = ds.drop_vars(all_vars_owi + all_vars_rvl + osw_heavy_vars, errors='ignore')
     ds = ds[to_keep_vars]
-    ds['time_sar'] = xr.DataArray([datetime.datetime.strptime(os.path.basename(ds.encoding["source"]).split('-')[5],'%Y%m%dt%H%M%S')],
-                                  dims=['time_sar'])
+    ds["time_sar"] = xr.DataArray(
+        [
+            datetime.datetime.strptime(
+                os.path.basename(ds.encoding["source"]).split("-")[5], "%Y%m%dt%H%M%S"
+            )
+        ],
+        dims=["time_sar"],
+    )
     # ds = ds.expand_dims('time')
     # ds = ds.expand_dims({"time": ds.time})
-    ds = ds.squeeze(['oswRaSize','oswAzSize'])
+    ds = ds.squeeze(["oswRaSize", "oswAzSize"])
     for var in ds.data_vars:
         if ds[var].dims == ():
             ds[var] = ds[var].expand_dims(time_sar=ds.time_sar)
-    
+
     return ds
 
-def treat_one_safe_wv(safewv,path_altimeter,altidb,acronym_alti_path_ifr,swh_varname,
-                      coloc_listing,cpt,dev=False,progressbar=True):
+
+def treat_one_safe_wv(
+    safewv,
+    path_altimeter,
+    altidb,
+    acronym_alti_path_ifr,
+    swh_varname,
+    coloc_listing,
+    cpt,
+    dev=False,
+    progressbar=True,
+):
     """
-    
+
     Colocate one SAFE OCN WV with altimeters
-    
+
     :param safewv: Description
     :param path_altimeter: Description
     :param altidb: Description
@@ -998,7 +1042,7 @@ def treat_one_safe_wv(safewv,path_altimeter,altidb,acronym_alti_path_ifr,swh_var
 
 
     """
-    logging.debug("SAR Sentinel-1 WV SAFE to process : %s ", safewv)    
+    logging.debug("SAR Sentinel-1 WV SAFE to process : %s ", safewv)
     dict4colocs = {}
     dict4colocs["times_SAR"] = []  # list of SAR Datetime
     dict4colocs["liste_count"] = []  # list of wave
@@ -1015,13 +1059,15 @@ def treat_one_safe_wv(safewv,path_altimeter,altidb,acronym_alti_path_ifr,swh_var
     # if dev:
     #     logging.info('dev mode reduce, number of measurement')
     #     measurement_wv_list = measurement_wv_list[0:3]
-    logging.debug('Number of measurement in the SAFE : %d',len(measurement_wv_list))
+    logging.debug("Number of measurement in the SAFE : %d", len(measurement_wv_list))
     # SAR = xr.open_mfdataset(measurement_wv_list,
     #                 combine="nested",compat='no_conflicts',join='outer',preprocess=preprocess_wv_s1_ocn).compute()
     tmpsarmeasu = []
-    for iiwv in tqdm(range(len(measurement_wv_list)),disable=True):
-        tmpsarmeasu.append(preprocess_wv_s1_ocn(xr.open_dataset(measurement_wv_list[iiwv])))
-    SAR = xr.concat(tmpsarmeasu,dim='time_sar').load()
+    for iiwv in tqdm(range(len(measurement_wv_list)), disable=True):
+        tmpsarmeasu.append(
+            preprocess_wv_s1_ocn(xr.open_dataset(measurement_wv_list[iiwv]))
+        )
+    SAR = xr.concat(tmpsarmeasu, dim="time_sar").load()
     logging.debug("all SAR files loaded")
     # SAR = add_oswTotalHs_to_SAR_dataset(sar_wv_ds=SAR, sar_unit=args.sat)
     liste_match = []
@@ -1034,10 +1080,10 @@ def treat_one_safe_wv(safewv,path_altimeter,altidb,acronym_alti_path_ifr,swh_var
     ds_alti = None
     tree_ALT = None
     if progressbar:
-        iterratotor = tqdm(range(len(liste_date_SAR_dt)),desc='WV measurement')
+        iterratotor = tqdm(range(len(liste_date_SAR_dt)), desc="WV measurement")
     else:
         iterratotor = range(len(liste_date_SAR_dt))
-    for index_t_sar in iterratotor: # loop over WV measurements
+    for index_t_sar in iterratotor:  # loop over WV measurements
         # for index_t_sar in pbar:
         # dede = "nb sar measurement progression %s/%s nb matchups %s" % (
         #     index_t_sar,
@@ -1101,8 +1147,8 @@ def treat_one_safe_wv(safewv,path_altimeter,altidb,acronym_alti_path_ifr,swh_var
                 if len(list_alti_pts_matching_space_and_time) > 0:
                     coloc_listing[fullpathL1WVSLC] = list_alti_files_timespace_match
                     cpt["nb_index_sar_with_matching_alti"] += 1
-                    if dev and cpt["nb_index_sar_with_matching_alti"]>3:
-                        logging.info('break loops after finding few matchups')
+                    if dev and cpt["nb_index_sar_with_matching_alti"] > 3:
+                        logging.info("break loops after finding few matchups")
                         break
                     # graphic_display(liste_step1,liste_geo,list_alti_pts_matching_space_and_time,DELTA_DIST)
                     # lon_alti = min(lon_alti) # TODO fix
@@ -1147,10 +1193,11 @@ def treat_one_safe_wv(safewv,path_altimeter,altidb,acronym_alti_path_ifr,swh_var
             coords={"time_sar": colocated_observations["time_sar"].values},
         )
     logging.debug("merge alti and SAR colocated values")
-    
+
     # list_alti_files += [os.path.basename(ggh) for ggh in liste_step1]
     colocated_observations = xr.merge([colocated_observations, alti_colocated_ds])
-    return colocated_observations,coloc_listing,cpt
+    return colocated_observations, coloc_listing, cpt
+
 
 def core_coloc(
     startdate, alt, sarunit, outputdir, dev=False, redo=False, progressbar=False
@@ -1182,20 +1229,19 @@ def core_coloc(
         raise Exception("altidb %s not handled" % altidb)
 
     logging.info("path_altimeter : %s", path_altimeter)
-    long_name_sar_unit  = 'sentinel-1'+sarunit[-1].lower()
+    long_name_sar_unit = "sentinel-1" + sarunit[-1].lower()
     pattern_sar = os.path.join(
-                path_SAR,
-                long_name_sar_unit,
-                'L2',
-                'WV',sarunit+"_WV_OCN__2S",
-                Y,
-                JY,
-                "*.SAFE"
-            )
-    logging.info("SAR ESA CCI Sea state Ifr pattern : %s", pattern_sar)
-    Input_SAR = sorted(
-        glob.glob(pattern_sar)
+        path_SAR,
+        long_name_sar_unit,
+        "L2",
+        "WV",
+        sarunit + "_WV_OCN__2S",
+        Y,
+        JY,
+        "*.SAFE",
     )
+    logging.info("SAR ESA CCI Sea state Ifr pattern : %s", pattern_sar)
+    Input_SAR = sorted(glob.glob(pattern_sar))
     logging.info("%s SAR WV SAFE found", len(Input_SAR))
     output_nc_file = os.path.join(
         outputdir,
@@ -1214,18 +1260,18 @@ def core_coloc(
         + "_degree.nc",
     )
     time.sleep(np.random.randint(0, 10, 1)[0])
-    os.makedirs(os.path.dirname(output_nc_file), 0o0775,exist_ok=True)
+    os.makedirs(os.path.dirname(output_nc_file), 0o0775, exist_ok=True)
     if os.path.exists(output_nc_file) and redo is False:
         logging.info("output coloc S1-WV alti file already exists (redo is False)")
         sys.exit(0)
 
     coloc_listing = {}
     # list_alti_files = []
-    
+
     if len(Input_SAR):
         # if dev is True:
-            # logging.info("development mode activated")
-            # Input_SAR = Input_SAR[0:3]
+        # logging.info("development mode activated")
+        # Input_SAR = Input_SAR[0:3]
         if altidb == "cci":
             swh_varname = "swh_denoised"
             acronym_alti_path_ifr = alt.split("_")[1]
@@ -1233,36 +1279,47 @@ def core_coloc(
         elif altidb == "cmems":
             swh_varname = "VAVH"
             acronym_alti_path_ifr = POSSIBLES_CMEMS_ALTI[alt.split("_")[1]]
-            if acronym_alti_path_ifr=="swon": #particular case for SWOT
-                acronym_alti_path_ifr="swot"
+            if acronym_alti_path_ifr == "swon":  # particular case for SWOT
+                acronym_alti_path_ifr = "swot"
         else:
             raise Exception("altidb %s not handled" % altidb)
         all_safe_matchups = []
         # for ssi,safewv in enumerate(Input_SAR):
-        pbar = tqdm(range(len(Input_SAR)),desc='WV SAFE')
+        pbar = tqdm(range(len(Input_SAR)), desc="WV SAFE")
         for ssi in pbar:
-            pbar.set_description('WV SAFE : nb colocs %i'%cpt["nb_index_sar_with_matching_alti"])
+            pbar.set_description(
+                "WV SAFE : nb colocs %i" % cpt["nb_index_sar_with_matching_alti"]
+            )
             safewv = Input_SAR[ssi]
-            logging.debug('%i/%i',ssi+1,len(Input_SAR))
+            logging.debug("%i/%i", ssi + 1, len(Input_SAR))
             # treat one safe here
-            one_safe_colocs,coloc_listing,cpt = treat_one_safe_wv(safewv,path_altimeter,altidb,acronym_alti_path_ifr,swh_varname,
-                      coloc_listing,cpt=cpt,dev=dev,progressbar=progressbar,)
+            one_safe_colocs, coloc_listing, cpt = treat_one_safe_wv(
+                safewv,
+                path_altimeter,
+                altidb,
+                acronym_alti_path_ifr,
+                swh_varname,
+                coloc_listing,
+                cpt=cpt,
+                dev=dev,
+                progressbar=progressbar,
+            )
             # if len(one_safe_colocs.time)>0 and len(one_safe_colocs.time_sar)>0:
-            if len(one_safe_colocs.time_sar)>0:
+            if len(one_safe_colocs.time_sar) > 0:
                 all_safe_matchups.append(one_safe_colocs)
-            if dev and cpt["nb_index_sar_with_matching_alti"]>3:
-                logging.info('break loops after finding few matchups')
+            if dev and cpt["nb_index_sar_with_matching_alti"] > 3:
+                logging.info("break loops after finding few matchups")
                 break
-        if len(all_safe_matchups)>0:
-            daily_colocated_observations = xr.concat(all_safe_matchups,dim='time_sar')
+        if len(all_safe_matchups) > 0:
+            daily_colocated_observations = xr.concat(all_safe_matchups, dim="time_sar")
         # end of the loop over SAR SAFE
         if os.path.exists(output_nc_file) and redo:
             os.remove(output_nc_file)
 
-       
             # colocated_observations = xr.concat([colocated_observations,alti_colocated_ds],dim='time')
         output_file_written = save_coloc_netCDF_file(
-            daily_colocated_observations, output_nc_file)
+            daily_colocated_observations, output_nc_file
+        )
         if output_file_written:
             logging.info("successfull save output file: %s", output_nc_file)
 
@@ -1288,6 +1345,7 @@ def core_coloc(
     else:
         logging.info("no SAR WV data for %s", startdate)
     return cpt
+
 
 def entrypoint():
     tinit = time.time()
@@ -1339,9 +1397,12 @@ def entrypoint():
         )
     else:
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt="%d/%m/%Y %H:%M:%S")
-    logging.info('Start of execution for script %s using\
-                  WV Level-2 OCN and altimeters from CCI sea state L2P or CMEMS WAV L3',os.path.basename(__file__))
-    logging.info('development/test mode activated: %s',args.dev)
+    logging.info(
+        "Start of execution for script %s using\
+                  WV Level-2 OCN and altimeters from CCI sea state L2P or CMEMS WAV L3",
+        os.path.basename(__file__),
+    )
+    logging.info("development/test mode activated: %s", args.dev)
     cpt = core_coloc(
         sarunit=args.sat,
         alt=args.alt,
@@ -1355,6 +1416,7 @@ def entrypoint():
     logging.info("counters: %s", cpt)
     logging.info("analysis done in %1.1f sec", time.time() - t1)
     logging.info("end.")
+
+
 if __name__ == "__main__":
     entrypoint()
-

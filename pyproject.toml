@@ -24,13 +24,16 @@ classifiers = [  #! Update me
   "Topic :: Software Development :: Libraries :: Python Modules",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.11"
 xarray = "2025.12.0"
 pandas = '3.0.0'
 tqdm = "4.67.1"
@@ -94,7 +97,7 @@ color_output = true
 
 [tool.mypy]
 # https://mypy.readthedocs.io/en/latest/config_file.html#using-a-pyproject-toml-file
-python_version = "3.9"
+python_version = "3.11"
 pretty = true
 show_traceback = true
 color_output = true
@@ -145,4 +148,4 @@ fail_under = 50
 show_missing = true
 
 [tool.poetry.scripts]
-unifiedwvalticolocs = "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci:entrypoint"
+procunifiedwvalticolocs = "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci:entrypoint"
