@@ -424,7 +424,6 @@ def get_distances_v2(sar_dataset, subset_ok_match_alti, lon_varname, lat_varname
     Args:
         sar_dataset (xarray.Dataset): The SAR dataset.
         subset_ok_match_alti (xarray.Dataset): The Alti dataset subset.
-        date_sar_dt (datetime): SAR datetime object.
         lon_varname (str): Variable name for Longitude in Alti ds.
         lat_varname (str): Variable name for Latitude in Alti ds.
 
@@ -455,7 +454,6 @@ def step_3_closer_temp_match(sar_dataset, subset_alti, delta_t_sat_short, altidb
     Args:
         sar_dataset (xarray.Dataset): WV dataset.
         subset_alti (xarray.Dataset): Subset of the initial ALTI dataset.
-        date_sar_dt (datetime): SAR acquisition time (UTC datetime).
         delta_t_sat_short (int): Time windows range (int in hour).
         altidb (str): 'cci' or 'cmems'.
 
