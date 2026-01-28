@@ -208,19 +208,20 @@ def is_cmems_file_matching_in_time(
     one_nc_file_alti, lst_nc_files_alti_timematchup, groups_dates, sta, sto
 ):
     """
-    test whether an alti file is matching with a time window
-    if yes -> add the file to a list returned
+    Test whether an alti file is matching with a time window.
+    If yes -> add the file to a list returned.
 
-    Arguments
-        one_nc_file_alti (str):
-        lst_nc_files_alti_timematchup (list):
-        groups_dates (dict):
-        sta (datetime.datetime):
-        sto (datetime.datetime):
+    Args:
+        one_nc_file_alti (str): Path to the altimeter file.
+        lst_nc_files_alti_timematchup (list): List of matching files.
+        groups_dates (dict): Dictionary of dates.
+        sta (datetime.datetime): Start time.
+        sto (datetime.datetime): Stop time.
 
     Returns:
-        lst_nc_files_alti_timematchup (list):
-        groups_dates (dict):
+        tuple: A tuple containing:
+            - lst_nc_files_alti_timematchup (list): Updated list.
+            - groups_dates (dict): Updated dictionary.
 
     """
     ymdthms = "%Y%m%dT%H%M%S"
@@ -418,10 +419,17 @@ def step_2_geographic_match(sards, ds_alti, tree_alti):
 
 def get_distances_v2(sar_dataset, subset_ok_match_alti, lon_varname, lat_varname):
     """
-    get the distance in kilometers between a WV image and a set of alti pts
+    Compute distances between SAR center and Alti points.
 
-    Arguments:
-        sar_dataset (xr.Dataset): WV data of a given image
+    Args:
+        sar_dataset (xarray.Dataset): The SAR dataset.
+        subset_ok_match_alti (xarray.Dataset): The Alti dataset subset.
+        date_sar_dt (datetime): SAR datetime object.
+        lon_varname (str): Variable name for Longitude in Alti ds.
+        lat_varname (str): Variable name for Latitude in Alti ds.
+
+    Returns:
+        np.array: Array of distances in km.
 
     """
     t0 = time.time()
@@ -444,25 +452,20 @@ def step_3_closer_temp_match(sar_dataset, subset_alti, delta_t_sat_short, altidb
     """
     Find the altimeter points within the time window around SAR-WV acquisition.
 
-    Arguments:
-        sar_dataset (xr.Dataset): contains WV data for a given WV image
-        subset_alti (xr.Dataset): contains alti data matching in space with WV
-        date_sar_dt (datetime.datetime): starting date WV measurement
-        delta_t_sat_short (int): number of seconds maximum between alti and WV
-        altidb (str): cmems or cci
+    Args:
+        sar_dataset (xarray.Dataset): WV dataset.
+        subset_alti (xarray.Dataset): Subset of the initial ALTI dataset.
+        date_sar_dt (datetime): SAR acquisition time (UTC datetime).
+        delta_t_sat_short (int): Time windows range (int in hour).
+        altidb (str): 'cci' or 'cmems'.
 
     Returns:
-        list_alti_pts_matching_space_and_time (list): containing alti dates np64
-        delta_t_closest_in_space (float):
-        hs_alti_closest (float):
-        lat_alti (nd.array):
-        lon_alti (nd.array):
-        delta_d_closest_in_space (float):
-        closest_lon_alti (float):
-        closest_lat_alti (float):
-        closest_time (np.datetime64):
-        list_alti_files_timespace_match (list): containing unique alti fpaths
+        tuple: List of matching points, closest times, distances, etc.
+
+    Raises:
+        ValueError: If altidb is not 'cci' or 'cmems'.
     """
+
     list_alti_pts_matching_space_and_time = []
 
     if altidb == "cci":
@@ -905,25 +908,24 @@ def treat_one_measurement_wv(
     swh_varname,
 ):
     """
-    associate a WV OCN measurement with altimeter observation.
 
-    Parameters
-        sards (xr.Dataset): S1 OCN WV data, contains a unique WV image
-        list_date_sar_dt (list): contains the WV starting measurement dates
+    Associate a WV OCN measurement with altimeter observation.
+
+    Args:
+        sards (xr.Dataset): S1 OCN WV data, contains a unique WV image.
+        list_date_sar_dt (list): Contains the WV starting measurement dates.
         sarunit (str): S1A or S1B or ...
-        index_t_sar (int): index of SAR WV  in the sards or list_date_sar_dt
-        altidb (str): cmems or cci
-        coloc_listing (dict): to store filepath (meta-coloc or pre-coloc)
-        dict4colocs (dict): contain the altimeters values
-        cpt (collection.defaultdict): counter
-        path_altimeter (str): directory where altimeter files are stored
-        acronym_alti_path_ifr (str):
-        swh_varname (str): variable name for altimeter SWH
+        index_t_sar (int): Index of SAR WV in the sards or list_date_sar_dt.
+        altidb (str): cmems or cci.
+        coloc_listing (dict): To store filepath (meta-coloc or pre-coloc).
+        dict4colocs (dict): Contain the altimeters values.
+        cpt (collection.defaultdict): Counter.
+        path_altimeter (str): Directory where altimeter files are stored.
+        acronym_alti_path_ifr (str): Acronym for folder path.
+        swh_varname (str): Variable name for altimeter SWH.
 
     Returns:
-        dict4colocs (dict): contain the altimeters values
-        coloc_listing (dict): to store filepath (meta-coloc or pre-coloc)
-        cpt (collection.defaultdict): counter
+        tuple: A tuple containing (dict4colocs, coloc_listing).
 
     """
     cpt["nb_index_sar_browsed"] += 1
