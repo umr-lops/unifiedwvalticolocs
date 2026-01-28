@@ -1,9 +1,8 @@
 """
-Antoine Grouazel
-12 July 2021
-inspired from Gabriel Morand work and tuned for CCI WV v3.2 fot
-Script to create a NetCDF with colocation data's from Jason-3 ALT
- and CCI SAR v3.0 dataset
+author: Antoine Grouazel
+Script to create a NetCDF with colocation data's from ALT
+ and WV OCN datasets
+
 """
 
 import argparse
@@ -19,9 +18,7 @@ from collections import defaultdict
 from datetime import timezone
 from resource import RUSAGE_SELF, getrusage
 
-import netCDF4
 import numpy as np
-import pandas as pd
 import xarray as xr
 from dateutil import rrule
 from s1ifr.get_full_path_from_measurement import (
@@ -63,18 +60,21 @@ path_SAR = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/data/esa/"
 # OBSERVATIONS_014_001/dataset-wav-alti-l3-swh-rt-global-j3/'
 # path_alt = '/home/ref-cmems-public/tac/wave/WAVE_GLO_WAV_L3_SWH_NRT_
 # OBSERVATIONS_014_001/dataset-wav-alti-l3-swh-rt-global-%s'
+subset_alti_name_dir = "cmems_obs-wave_glo_phy-swh_nrt_%s-l3_PT1S"
+cmems_dir = "/home/ref-cmems-public/tac/wave/WAVE_GLO_PHY_SWH_L3_NRT_014_001/"
 PATH_ALT = {
-    "cmems": "/home/ref-cmems-public/tac/wave/WAVE_GLO_PHY_SWH_L3\
-        _NRT_014_001/cmems_obs-wave_glo_phy-swh_nrt_%s-l3_PT1S",
+    "cmems": os.path.join(cmems_dir, subset_alti_name_dir),
     # "cci": "/home/datawork-cersat-public/provider/cci_seastate/products/v3/"
     "cci": "/home/ref-cersat-public/ocean-waves/cci-seastate/v4/",
     # v4 followed by v4/data/satellite/altimeter/l2p/
 }
-DIR_OUTPUT = "/home/datawork-cersat-public/cache/project/mpc-sentinel1\
-    /analysis/s1_data_analysis/hs_nn/unified_colocs_wv_alti"
+DIR_OUT_ROOT = "/home/datawork-cersat-public/cache/project/mpc-sentinel1"
+DIR_OUT_SUBDIRS = "analysis/s1_data_analysis/hs_nn/unified_colocs_wv_alti"
+DIR_OUTPUT = os.path.join(DIR_OUT_ROOT, DIR_OUT_SUBDIRS)
 delta_t_sat = 3  # hours
 delta_t_sat_short = 3 * 3600  # in seconds
 DELTA_DIST = 2  # degree
+MAX_NB_MATCHUPS_DEV_MODE = 3
 error_altidb = "altidb %s not handled"
 t1 = time.time()
 parser = argparse.ArgumentParser()
@@ -138,10 +138,12 @@ def step_0_get_sar_dt(sards):
 def step_1_temp_match_cci(date_sar_dt, delta_t_sat, path_altimeters, acro_alti):
     """
     get all alti files for a given day
+
     :param date_sar_dt:SAR acquisition time  ( datetime )
     :param delta_t_sat:acquisition Range (int in hour)
     :param path: Alt's dataset path (string)
     :param acro_alti str 2 letters
+
     :return: final_list_alti (String array) each string is ALT's dataset path
     """
 
@@ -205,6 +207,22 @@ def step_1_temp_match(
 def is_cmems_file_matching_in_time(
     one_nc_file_alti, lst_nc_files_alti_timematchup, groups_dates, sta, sto
 ):
+    """
+    test whether an alti file is matching with a time window
+    if yes -> add the file to a list returned
+
+    Arguments
+        one_nc_file_alti (str):
+        lst_nc_files_alti_timematchup (list):
+        groups_dates (dict):
+        sta (datetime.datetime):
+        sto (datetime.datetime):
+
+    Returns:
+        lst_nc_files_alti_timematchup (list):
+        groups_dates (dict):
+
+    """
     ymdthms = "%Y%m%dT%H%M%S"
     ymdth = "%Y%m%dT%H"
     date_alt_sta = datetime.datetime.strptime(
@@ -241,7 +259,7 @@ def is_cmems_file_matching_in_time(
             not in lst_nc_files_alti_timematchup
         ):  # remove duplicates
             lst_nc_files_alti_timematchup.append(one_nc_file_alti)
-    return lst_nc_files_alti_timematchup
+    return lst_nc_files_alti_timematchup, groups_dates
 
 
 def step_1_temp_match_cmems(date_sar_dt, delta_t_sat, path_altimeters, acro_alti):
@@ -282,7 +300,7 @@ def step_1_temp_match_cmems(date_sar_dt, delta_t_sat, path_altimeters, acro_alti
         )  # gather all ALT file within sta and sto range
     groups_dates = {}
     for gg in lst_nc_files_alti_sorted:
-        is_cmems_file_matching_in_time(
+        lst_nc_files_alti_timematchup, groups_dates = is_cmems_file_matching_in_time(
             one_nc_file_alti=gg,
             lst_nc_files_alti_timematchup=lst_nc_files_alti_timematchup,
             groups_dates=groups_dates,
@@ -378,18 +396,18 @@ def read_all_alti_files(liste_altimeter_files, altidatabase):
     return subset_alti1, tree_alti
 
 
-def step_2_geographic_match(sards, ds_alti, tree_alti, time_sar_index):
+def step_2_geographic_match(sards, ds_alti, tree_alti):
     """
 
+    get altimeter points that are within a radius around a set of WV images
+
+    :param sards: xarray.Dataset of a given image WV
     :param ds_alti: xarray.core.Dataset altimeter data
     :param altidatabase (str): cci or cmems
-    :param time_sar_index (int)
     :return:liste_time : (numpy dt64 Array) time measure for each matching ALT
     """
     subset_alti2 = None
-    points_sar = np.c_[
-        sards["oswLat"].values[time_sar_index], sards["oswLon"].values[time_sar_index]
-    ]
+    points_sar = np.c_[sards["oswLat"].values, sards["oswLon"].values]
 
     queryballpoint = tree_alti.query_ball_point(points_sar, r=DELTA_DIST)
     queryballpoint = np.array(queryballpoint[0])
@@ -398,56 +416,52 @@ def step_2_geographic_match(sards, ds_alti, tree_alti, time_sar_index):
     return subset_alti2
 
 
-def get_distances_v2(
-    sar_dataset, subset_ok_match_alti, date_sar_dt, lon_varname, lat_varname
-):
+def get_distances_v2(sar_dataset, subset_ok_match_alti, lon_varname, lat_varname):
+    """
+    get the distance in kilometers between a WV image and a set of alti pts
+
+    Arguments:
+        sar_dataset (xr.Dataset): WV data of a given image
+
+    """
     t0 = time.time()
     lons_alt = subset_ok_match_alti[lon_varname].values
     lats_alt = subset_ok_match_alti[lat_varname].values
-    date_sar_dt = date_sar_dt.replace(tzinfo=None)
-    lonsar = sar_dataset.sel(time_sar=date_sar_dt)["oswLon"].values
-    latsar = sar_dataset.sel(time_sar=date_sar_dt)["oswLat"].values
+    # date_sar_dt = date_sar_dt.replace(tzinfo=None)
+    # lonsar = sar_dataset.sel(time_sar=date_sar_dt)["oswLon"].values
+    # latsar = sar_dataset.sel(time_sar=date_sar_dt)["oswLat"].values
+    lonsar = sar_dataset["oswLon"].values
+    latsar = sar_dataset["oswLat"].values
     lonssartiled = np.tile(lonsar, (len(lons_alt)))
     latssartiled = np.tile(latsar, (len(lons_alt)))
     logging.debug("lons_alt %s,lonssartiled %s ", lons_alt.shape, lonssartiled.shape)
     all_dists = haversine(lonssartiled, latssartiled, lons_alt, lats_alt)
-    logging.debug("time get_distances_v2 : %1.2f sec", (time.time() - t0))
+    logging.debug("time  to get distances v2 : %1.2f sec", (time.time() - t0))
     return all_dists
 
 
-def step_3_closer_temp_match(
-    sar_dataset, subset_alti, date_sar_dt, delta_t_sat_short, altidb
-):
+def step_3_closer_temp_match(sar_dataset, subset_alti, delta_t_sat_short, altidb):
     """
     Find the altimeter points within the time window around SAR-WV acquisition.
 
-    Args:
-        sar_dataset (xarray.Dataset): WV dataset.
-        subset_alti (xarray.Dataset): Subset of the initial ALTI dataset
-            (only points selected at geographic match).
-        date_sar_dt (datetime): SAR acquisition time (UTC datetime).
-        delta_t_sat_short (int): Time windows range (int in hour),
-            e.g. co-locations are within +/-delta_t_sat_short.
-        altidb (str): 'cci' or 'cmems'.
+    Arguments:
+        sar_dataset (xr.Dataset): contains WV data for a given WV image
+        subset_alti (xr.Dataset): contains alti data matching in space with WV
+        date_sar_dt (datetime.datetime): starting date WV measurement
+        delta_t_sat_short (int): number of seconds maximum between alti and WV
+        altidb (str): cmems or cci
 
     Returns:
-        tuple: A tuple containing:
-            - list_alti_pts_matching_space_and_time (list[str]):
-                Measurement TIME from ALTI.
-            - DELTA_T_closer (list[str]): Closest matching measurement in time.
-            - HS_closer (float): Closest VAVH measurement.
-            - delta_d_closer (float): Closest matching measurement in Space.
-            - lon_alt (list): Array of matching Lon.
-            - lat_alt (list): Array of matching Lat.
-            - closest_lon_alti (float): Closest Alti Longitude.
-            - closest_lat_alti (float): Closest Alti Latitude.
-            - closest_time (np.datetime64): Time of alti for closest
-              distance in space wrt to WV.
-            - list_alti_files_timespace_match (list[str]): Basename of
-                 altimeter paths.
-
-    Raises:
-        Exception: If criteria for matching are not met.
+        list_alti_pts_matching_space_and_time (list): containing alti dates np64
+        delta_t_closest_in_space (float):
+        hs_alti_closest (float):
+        lat_alti (nd.array):
+        lon_alti (nd.array):
+        delta_d_closest_in_space (float):
+        closest_lon_alti (float):
+        closest_lat_alti (float):
+        closest_time (np.datetime64):
+        list_alti_files_timespace_match (list): containing unique alti fpaths
     """
     list_alti_pts_matching_space_and_time = []
 
@@ -455,7 +469,6 @@ def step_3_closer_temp_match(
         swh_varname = "swh_denoised"
         lon_varname = "lon"
         lat_varname = "lat"
-
     elif altidb == "cmems":
         swh_varname = "VAVH"
         lon_varname = "longitude"
@@ -463,7 +476,7 @@ def step_3_closer_temp_match(
     else:
         raise ValueError(error_altidb % altidb)
 
-    delta_t_closest_in_space = np.timedelta64(delta_t_sat_short, "s")
+    delta_t_closest_in_space = np.nan
     hs_alti_closest = np.nan
     delta_d_closest_in_space = np.nan
     closest_lon_alti = np.nan
@@ -472,48 +485,60 @@ def step_3_closer_temp_match(
     lat_alti = []
     lon_alti = []
     list_alti_files_timespace_match = []
-    UNITS_TIME = "seconds since 2010-01-01"
-    dates_alt_dt64 = subset_alti["time"].values.squeeze()
-    if dates_alt_dt64.size == 1:
+
+    # --- FIX STARTS HERE ---
+
+    # 1. Get Alti Times as numpy datetime64 [ns]
+    dates_alt_dt64 = subset_alti["time"].values
+    if dates_alt_dt64.ndim == 0:
         dates_alt_dt64 = np.array([dates_alt_dt64])
-    dates_alt_dt = np.array([pd.Timestamp(jj) for jj in dates_alt_dt64])
-    sar_date_num = netCDF4.date2num(date_sar_dt, UNITS_TIME, calendar="standard")
-    dates_alt_num = netCDF4.date2num(dates_alt_dt, UNITS_TIME, calendar="standard")
-    diffs_times = abs(dates_alt_num - sar_date_num)
-    list_alti_pts_matching_space_and_time = subset_alti["time"].values[
-        (diffs_times < delta_t_sat_short)
-    ]
-    inds_ok_alti = np.flatnonzero(diffs_times < delta_t_sat_short)
+
+    # 2. Convert SAR Date to numpy datetime64 [ns]
+    # We strip timezone info to ensure compatibility with numpy's naive arithmetic
+    # (assuming both are effectively UTC)
+    # sar_dt64 = np.datetime64(date_sar_dt.replace(tzinfo=None))
+    sar_dt64 = sar_dataset.time_sar.values
+
+    # 3. Calculate absolute difference in seconds directly
+    # This avoids the date2num epoch confusion entirely
+    diffs_times_seconds = np.abs((dates_alt_dt64 - sar_dt64) / np.timedelta64(1, "s"))
+
+    # 4. Filter
+    mask_time_ok = diffs_times_seconds < delta_t_sat_short
+    list_alti_pts_matching_space_and_time = dates_alt_dt64[mask_time_ok]
+
+    # --- FIX ENDS HERE ---
+
+    inds_ok_alti = np.flatnonzero(mask_time_ok)
+
     if len(inds_ok_alti) > 0:
         subset_ok_match_alti = subset_alti.isel(time=inds_ok_alti)
         all_dists2 = get_distances_v2(
-            sar_dataset, subset_ok_match_alti, date_sar_dt, lon_varname, lat_varname
+            sar_dataset, subset_ok_match_alti, lon_varname, lat_varname
         )
         ind_closest_in_dist = np.argmin(all_dists2)
         delta_d_closest_in_space = all_dists2[ind_closest_in_dist]
+
+        # Use simple indexing based on the subset we just created
         hs_alti_closest = subset_ok_match_alti.isel(time=ind_closest_in_dist)[
             swh_varname
         ].values
-        lat_alti = subset_alti.sel(time=list_alti_pts_matching_space_and_time)[
-            lat_varname
-        ].values
-        lon_alti = subset_alti.sel(time=list_alti_pts_matching_space_and_time)[
-            lon_varname
-        ].values
-        lon_alti[
-            (lon_alti > 180)
-        ] -= 360.0  # because CMEMS data is between 0 and 360. deg
+
+        lat_alti = subset_ok_match_alti[lat_varname].values
+        lon_alti = subset_ok_match_alti[lon_varname].values
+
+        # Note: No need to re-subtract 360 here if it was done in read_all_alti_files
+        # But keeping it safe:
+        lon_alti[(lon_alti > 180)] -= 360.0
+
         closest_lon_alti = lon_alti[ind_closest_in_dist]
         closest_lat_alti = lat_alti[ind_closest_in_dist]
-        closest_time = list_alti_pts_matching_space_and_time[ind_closest_in_dist]
-        date_sar_dt_naive = date_sar_dt.replace(tzinfo=None)
-        delta_t_closest_in_space = (
-            closest_time - np.datetime64(date_sar_dt_naive)
-        ).astype("timedelta64[s]")
-        # delta_t_closest_in_space = (closest_time -
-        # np.datetime64(date_sar_dt)).astype("<m8[s]") # drop silently the tz ->
-        #  warning raised
+        closest_time = subset_ok_match_alti["time"].values[ind_closest_in_dist]
+
+        delta_t_closest_in_space = (closest_time - sar_dt64).astype("timedelta64[s]")
+
         list_alti_files_timespace_match = np.unique(subset_alti["fname"])
+
     return (
         list_alti_pts_matching_space_and_time,
         delta_t_closest_in_space,
@@ -737,50 +762,50 @@ def save_coloc_netcdf_file(ds_colocations, output_nc_file):
     return new_file_written
 
 
-def add_oswtotalhs_to_sar_dataset(sar_wv_ds, sar_unit):
-    """
+# def add_oswtotalhs_to_sar_dataset(sar_wv_ds, sar_unit):
+#     """
 
-    :param sar_wv_ds: xarray.Dataset CCI sea state IFR WV product (orbit file)
-    :param sar_unit: str S1A or ...
-    :return:
-    """
-    all_oswtotalhs = []
-    all_oswtotalhsstdev = []
-    for tt in sar_wv_ds["time"].values:
-        logging.debug("tt : %s", tt)
-        dt = from_npdt64_to_dt(tt)
-        fp_ocn = get_full_path_ocn_wv_from_approximate_date(dt, sar_unit, level="L2")
-        toths = np.nan
-        tothsstdev = np.nan
-        if fp_ocn and os.path.exists(fp_ocn):
-            tmpocn = xr.open_dataset(fp_ocn)
-            if "oswTotalHs" in tmpocn:
-                toths = tmpocn["oswTotalHs"].values[0][0]
-            if "oswTotalHsStdev" in tmpocn:
-                tothsstdev = tmpocn["oswTotalHsStdev"].values[0][0]
-        all_oswtotalhs.append(toths)
-        all_oswtotalhsstdev.append(tothsstdev)
-    sar_wv_ds["oswTotalHs"] = xr.DataArray(
-        all_oswtotalhs,
-        dims=["time"],
-        attrs={
-            "description": "values annotated in "
-            "S-1 WV L2 OCN oswTotalHs variable since 2022-06-07 ",
-            "unit": "m",
-            "algo": "Quach et al 2020",
-        },
-    )
-    sar_wv_ds["oswTotalHsStdev"] = xr.DataArray(
-        all_oswtotalhsstdev,
-        dims=["time"],
-        attrs={
-            "description": "values annotated in S-1"
-            " WV L2 OCN oswTotalHsStdev variable since 2022-06-07 ",
-            "unit": "m",
-            "algo": "Quach et al 2020",
-        },
-    )
-    return sar_wv_ds
+#     :param sar_wv_ds: xarray.Dataset CCI sea state IFR WV product (orbit file)
+#     :param sar_unit: str S1A or ...
+#     :return:
+#     """
+#     all_oswtotalhs = []
+#     all_oswtotalhsstdev = []
+#     for tt in sar_wv_ds["time"].values:
+#         logging.debug("tt : %s", tt)
+#         dt = from_npdt64_to_dt(tt)
+#         fp_ocn = get_full_path_ocn_wv_from_approximate_date(dt, sar_unit, level="L2")
+#         toths = np.nan
+#         tothsstdev = np.nan
+#         if fp_ocn and os.path.exists(fp_ocn):
+#             tmpocn = xr.open_dataset(fp_ocn)
+#             if "oswTotalHs" in tmpocn:
+#                 toths = tmpocn["oswTotalHs"].values[0][0]
+#             if "oswTotalHsStdev" in tmpocn:
+#                 tothsstdev = tmpocn["oswTotalHsStdev"].values[0][0]
+#         all_oswtotalhs.append(toths)
+#         all_oswtotalhsstdev.append(tothsstdev)
+#     sar_wv_ds["oswTotalHs"] = xr.DataArray(
+#         all_oswtotalhs,
+#         dims=["time"],
+#         attrs={
+#             "description": "values annotated in "
+#             "S-1 WV L2 OCN oswTotalHs variable since 2022-06-07 ",
+#             "unit": "m",
+#             "algo": "Quach et al 2020",
+#         },
+#     )
+#     sar_wv_ds["oswTotalHsStdev"] = xr.DataArray(
+#         all_oswtotalhsstdev,
+#         dims=["time"],
+#         attrs={
+#             "description": "values annotated in S-1"
+#             " WV L2 OCN oswTotalHsStdev variable since 2022-06-07 ",
+#             "unit": "m",
+#             "algo": "Quach et al 2020",
+#         },
+#     )
+#     return sar_wv_ds
 
 
 def get_original_wv_slc(date_sar, sar_unit):
@@ -868,7 +893,6 @@ def preprocess_wv_s1_ocn(ds):
 
 def treat_one_measurement_wv(
     sards,
-    ds_alti,
     list_date_sar_dt,
     sarunit,
     index_t_sar,
@@ -883,33 +907,48 @@ def treat_one_measurement_wv(
     """
     associate a WV OCN measurement with altimeter observation.
 
+    Parameters
+        sards (xr.Dataset): S1 OCN WV data, contains a unique WV image
+        list_date_sar_dt (list): contains the WV starting measurement dates
+        sarunit (str): S1A or S1B or ...
+        index_t_sar (int): index of SAR WV  in the sards or list_date_sar_dt
+        altidb (str): cmems or cci
+        coloc_listing (dict): to store filepath (meta-coloc or pre-coloc)
+        dict4colocs (dict): contain the altimeters values
+        cpt (collection.defaultdict): counter
+        path_altimeter (str): directory where altimeter files are stored
+        acronym_alti_path_ifr (str):
+        swh_varname (str): variable name for altimeter SWH
+
+    Returns:
+        dict4colocs (dict): contain the altimeters values
+        coloc_listing (dict): to store filepath (meta-coloc or pre-coloc)
+        cpt (collection.defaultdict): counter
 
     """
     cpt["nb_index_sar_browsed"] += 1
     date_sar_dt = list_date_sar_dt[index_t_sar]
     fillpath_l1_wv_slc = get_original_wv_slc(date_sar_dt, sar_unit=sarunit)
     coloc_listing[fillpath_l1_wv_slc] = []
-    if ds_alti is None:
-        liste_step1 = step_1_temp_match(
-            date_sar_dt,
-            delta_t_sat,
-            path_altimeters=path_altimeter,
-            acro_alti=acronym_alti_path_ifr,
-            altidb=altidb,
+    liste_step1 = step_1_temp_match(
+        date_sar_dt,
+        delta_t_sat,
+        path_altimeters=path_altimeter,
+        acro_alti=acronym_alti_path_ifr,
+        altidb=altidb,
+    )
+    if len(liste_step1) > 0:
+        # this step is done only once because all the SAR obs
+        #  from a day will be associated to the same alti ds
+        ds_alti, tree_alti = read_all_alti_files(
+            liste_altimeter_files=liste_step1, altidatabase=altidb
         )
-        if len(liste_step1) > 0:
-            # this step is done only once because all the SAR obs
-            #  from a day will be associated to the same alti ds
-            ds_alti, tree_alti = read_all_alti_files(
-                liste_altimeter_files=liste_step1, altidatabase=altidb
-            )
 
     if ds_alti:
         subset_alti = step_2_geographic_match(
             sards=sards,
             ds_alti=ds_alti,
             tree_alti=tree_alti,
-            time_sar_index=index_t_sar,
         )
         if subset_alti is not None:
             # if subset_alti["time"].values.size > 0:
@@ -925,14 +964,23 @@ def treat_one_measurement_wv(
                 closest_time,
                 list_alti_files_timespace_mu,
             ) = step_3_closer_temp_match(
-                sards, subset_alti, date_sar_dt, delta_t_sat_short, altidb=altidb
+                sar_dataset=sards,
+                subset_alti=subset_alti,
+                delta_t_sat_short=delta_t_sat_short,
+                altidb=altidb,
             )
             swh = subset_alti.sel(time=list_alti_pts_matching_space_and_time)[
                 swh_varname
             ].values
             swh_count = len(swh)
-            swh_mean = np.mean(swh, 0)
-            swh_std = np.std(swh, 0)
+
+            if swh_count > 0:
+                # Use nanmean/nanstd to safely handle NaNs if present in the data
+                swh_mean = np.nanmean(swh)
+                swh_std = np.nanstd(swh)
+            else:
+                swh_mean = np.nan
+                swh_std = np.nan
             if len(list_alti_pts_matching_space_and_time) > 0:
                 coloc_listing[fillpath_l1_wv_slc] = list_alti_files_timespace_mu
                 cpt["nb_index_sar_with_matching_alti"] += 1
@@ -950,7 +998,7 @@ def treat_one_measurement_wv(
     else:
         cpt["nb_index_sar_without_alti_file_corresponding"] += 1
         logging.debug("no files found")
-    return dict4colocs, coloc_listing
+    return dict4colocs, coloc_listing, cpt
 
 
 def treat_one_safe_wv(
@@ -1000,19 +1048,17 @@ def treat_one_safe_wv(
         tmpsarmeasu.append(
             preprocess_wv_s1_ocn(xr.open_dataset(measurement_wv_list[iiwv]))
         )
-    sar_dataset = xr.concat(tmpsarmeasu, dim="time_sar").load()
+    sar_dataset_safe = xr.concat(tmpsarmeasu, dim="time_sar").load()
     logging.debug("all SAR files loaded")
-    list_date_sar_dt = step_0_get_sar_dt(sards=sar_dataset)
-    ds_alti = None
+    list_date_sar_dt = step_0_get_sar_dt(sards=sar_dataset_safe)
     if progressbar:
         iterratotor = tqdm(range(len(list_date_sar_dt)), desc="WV measurement")
     else:
         iterratotor = range(len(list_date_sar_dt))
     for index_t_sar in iterratotor:  # loop over WV measurements
         # treat a measurement wv here
-        dict4colocs, coloc_listing = treat_one_measurement_wv(
-            sar_dataset,
-            ds_alti,
+        dict4colocs, coloc_listing, cpt = treat_one_measurement_wv(
+            sar_dataset_safe.isel(time_sar=index_t_sar),
             list_date_sar_dt,
             sarunit,
             index_t_sar=index_t_sar,
@@ -1024,11 +1070,11 @@ def treat_one_safe_wv(
             acronym_alti_path_ifr=acronym_alti_path_ifr,
             swh_varname=swh_varname,
         )
-        if dev and cpt["nb_index_sar_with_matching_alti"] > 3:
-            logging.info("break loops after finding few matchups")
+        if dev and cpt["nb_index_sar_with_matching_alti"] > MAX_NB_MATCHUPS_DEV_MODE:
+            logging.info("break loops over measurements after finding few matchups")
             break
     logging.debug("end of pair construction")
-    colocated_observations = sar_dataset.sel(time_sar=dict4colocs["times_SAR"])
+    colocated_observations = sar_dataset_safe.sel(time_sar=dict4colocs["times_SAR"])
 
     alti_colocated_ds = xr.Dataset()
     for vv in dict4colocs:
@@ -1158,39 +1204,42 @@ def core_coloc(
             # if len(one_safe_colocs.time)>0 and len(one_safe_colocs.time_sar)>0:
             if len(one_safe_colocs.time_sar) > 0:
                 all_safe_matchups.append(one_safe_colocs)
-            if dev and cpt["nb_index_sar_with_matching_alti"] > 3:
-                logging.info("break loops after finding few matchups")
+            if (
+                dev
+                and cpt["nb_index_sar_with_matching_alti"] > MAX_NB_MATCHUPS_DEV_MODE
+            ):
+                logging.info("break loops over SAFE after finding few matchups")
                 break
         if len(all_safe_matchups) > 0:
             daily_colocated_observations = xr.concat(all_safe_matchups, dim="time_sar")
-        # end of the loop over SAR SAFE
-        if os.path.exists(output_nc_file) and redo:
-            os.remove(output_nc_file)
-        output_file_written = save_coloc_netcdf_file(
-            daily_colocated_observations, output_nc_file
-        )
-        if output_file_written:
-            logging.info("successfull save output file: %s", output_nc_file)
-
-        if len(daily_colocated_observations["oswLon"]) > 0:
-            # write listing coloc
-            output_lst_file = os.path.join(
-                outputdir,
-                sarunit + "_" + alt,
-                date.strftime("%Y"),
-                "coloc_"
-                + startdate
-                + "_"
-                + sarunit
-                + "_WV_"
-                + alt
-                + "_"
-                + str(delta_t_sat)
-                + "_hours_"
-                + str(DELTA_DIST)
-                + "_degree.lst",
+            # end of the loop over SAR SAFE
+            if os.path.exists(output_nc_file) and redo:
+                os.remove(output_nc_file)
+            output_file_written = save_coloc_netcdf_file(
+                daily_colocated_observations, output_nc_file
             )
-            write_coloc_listing(output_lst_file, coloc_listing, redo=redo)
+            if output_file_written:
+                logging.info("successfull save output file: %s", output_nc_file)
+
+            if len(daily_colocated_observations["oswLon"]) > 0:
+                # write listing coloc
+                output_lst_file = os.path.join(
+                    outputdir,
+                    sarunit + "_" + alt,
+                    date.strftime("%Y"),
+                    "coloc_"
+                    + startdate
+                    + "_"
+                    + sarunit
+                    + "_WV_"
+                    + alt
+                    + "_"
+                    + str(delta_t_sat)
+                    + "_hours_"
+                    + str(DELTA_DIST)
+                    + "_degree.lst",
+                )
+                write_coloc_listing(output_lst_file, coloc_listing, redo=redo)
     else:
         logging.info("no SAR WV data for %s", startdate)
     return cpt
@@ -1248,8 +1297,8 @@ def entrypoint():
     else:
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt="%d/%m/%Y %H:%M:%S")
     logging.info(
-        "Start of execution for script %s using\
-                  WV Level-2 OCN and altimeters from "
+        "Start of execution for script %s using "
+        "WV Level-2 OCN and altimeters from "
         "CCI sea state L2P or CMEMS WAV L3",
         os.path.basename(__file__),
     )
