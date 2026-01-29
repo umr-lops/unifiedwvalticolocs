@@ -49,6 +49,7 @@ s1ifr = {version = "2026.1.29", source = "ifremer"}
 bandit = "^1.9.3"
 black = {version = "^26.1.0", allow-prereleases = true}  # Version 26 doesn't exist yet; 24.x is current stable
 darglint = "^1.8.1" # Warning: Project is unmaintained, 1.8.1 is the last version
+flake8 = "7.3.0"
 isort = {extras = ["colors"], version = "^7.0.0"}
 mypy = "^1.19.1"
 mypy-extensions = "^1.0.0"
