@@ -47,6 +47,7 @@ test:
 check-codestyle:
 	poetry run isort --diff --check-only --settings-path pyproject.toml ./
 	poetry run black --diff --check --config pyproject.toml ./
+	poetry run flake8 --config setup.cfg ./  # <--- ADD THIS LINE
 	poetry run darglint --verbosity 2 unifiedwvalticolocs tests
 
 .PHONY: mypy

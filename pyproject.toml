@@ -41,7 +41,7 @@ xarray = "2025.12.0"
 pandas = '3.0.0'
 tqdm = "4.67.1"
 scipy = "1.17.0"
-s1ifr = {version = "2025.9.23", source = "ifremer"}
+s1ifr = {version = "2026.1.29", source = "ifremer"}
 # s1ifr = "2026.1.13"
 
 

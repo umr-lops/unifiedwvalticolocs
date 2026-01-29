@@ -926,6 +926,7 @@ def treat_one_measurement_wv(
         tuple: A tuple containing (dict4colocs, coloc_listing).
 
     """
+    ds_alti = None
     cpt["nb_index_sar_browsed"] += 1
     date_sar_dt = list_date_sar_dt[index_t_sar]
     fillpath_l1_wv_slc = get_original_wv_slc(date_sar_dt, sar_unit=sarunit)
