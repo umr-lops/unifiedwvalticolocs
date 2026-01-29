@@ -1,36 +1,46 @@
 FROM python:3.11-slim-bookworm
 
+# 1. Declare Arguments and Environment Variables
+ARG CI_JOB_TOKEN
 ENV LANG=C.UTF-8 \
-  LC_ALL=C.UTF-8 \
-  PATH="${PATH}:/root/.poetry/bin"
-
-# Install system deps
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends \
-  curl \
-  && rm -rf /var/lib/apt/lists/*
-
-# Install Poetry
-RUN pip install --no-cache-dir poetry && \
-    poetry config virtualenvs.create false
+    LC_ALL=C.UTF-8 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /workspace
 
-# 1. Copy ONLY dependency files first (better Docker caching)
+# 2. Install system deps
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. Install Poetry
+RUN pip install --no-cache-dir poetry && \
+    poetry config virtualenvs.create false
+
+# 4. Configure Poetry for private GitLab registry (Cleanest way)
+# This replaces your manual "pip install s1ifr"
+RUN poetry config repositories.ifremer https://gitlab.ifremer.fr/api/v4/projects/14657/packages/pypi/simple && \
+    poetry config http-basic.ifremer gitlab-ci-token ${CI_JOB_TOKEN}
+
+# 5. Copy dependency files
 COPY pyproject.toml poetry.lock* ./
 
-# 2. Install dependencies (but NOT the project yet, because code isn't copied)
-RUN poetry install --no-root --without dev
+# 6. Install dependencies
+# We use a build arg to decide whether to include dev dependencies
+ARG INSTALL_DEV=false
+RUN if [ "$INSTALL_DEV" = "true" ] ; then poetry install --no-root ; else poetry install --no-root --without dev ; fi
 
-# 3. Copy the rest of your source code
+# 7. Copy the rest of the source code
 COPY . .
 
-# 4. Install YOUR project (this creates the executable and makes it importable)
-# We accept the dev arg here to decide if we want dev tools, but we MUST install the root project now.
-ARG INSTALL_DEV=false
-RUN bash -c "if [ $INSTALL_DEV == 'true' ] ; then poetry install ; else poetry install --without dev ; fi"
+# 8. Install the project itself
+RUN poetry install --without dev
 
-# (Optional) Verify installation during build
+# 9. Verify installation
 RUN which procunifiedwvalticolocs
 
-CMD mkdir -p /workspace
+# 10. The command to run your app
+# Replace 'your_script.py' with your actual entry point
+CMD ["python", "-m", "unifiedwvalticolocs"]
