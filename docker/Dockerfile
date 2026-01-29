@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir poetry && \
 
 # 4. Configure Poetry for private GitLab registry (Cleanest way)
 # This replaces your manual "pip install s1ifr"
-RUN poetry config repositories.ifremer https://gitlab.ifremer.fr/api/v4/projects/14657/packages/pypi/simple && \
+RUN poetry config repositories.ifremer https://gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple && \
     poetry config http-basic.ifremer gitlab-ci-token ${CI_JOB_TOKEN}
 
 # 5. Copy dependency files

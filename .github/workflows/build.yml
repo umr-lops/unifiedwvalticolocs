@@ -34,7 +34,7 @@ jobs:
           poetry config virtualenvs.in-project true
 
           # 2. CONFIGURE PRIVATE REPO (Same logic as your Dockerfile)
-          poetry config repositories.ifremer https://gitlab.ifremer.fr/api/v4/projects/14657/packages/pypi/simple
+          poetry config repositories.ifremer https://gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple
           poetry config http-basic.ifremer gitlab-ci-token $CI_JOB_TOKEN
 
           poetry install

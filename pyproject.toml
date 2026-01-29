@@ -32,7 +32,7 @@ classifiers = [  #! Update me
 
 [[tool.poetry.source]]
 name = "ifremer"
-url = "https://gitlab.ifremer.fr/api/v4/projects/14657/packages/pypi/simple"
+url = "https://gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple"
 priority = "supplemental"  # or "explicit"
 
 [tool.poetry.dependencies]
@@ -41,7 +41,7 @@ xarray = "2025.12.0"
 pandas = '3.0.0'
 tqdm = "4.67.1"
 scipy = "1.17.0"
-s1ifr = {version = "2026.1.13", source = "ifremer"}
+s1ifr = {version = "2025.9.23", source = "ifremer"}
 # s1ifr = "2026.1.13"
 
 
