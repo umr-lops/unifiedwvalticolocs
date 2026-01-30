@@ -875,8 +875,14 @@ def preprocess_wv_s1_ocn(ds):
         "oswQualityFlag",
         "oswAzSizeSLC",
     ]
+    consolidated_lst_var_tokeep = []
+    for vv in to_keep_vars:
+        if vv in ds.variables:
+            consolidated_lst_var_tokeep.append(vv)
+        else:
+            logging.debug("variable %s is not present in S1 WV OCN file", vv)
 
-    ds = ds[to_keep_vars]
+    ds = ds[consolidated_lst_var_tokeep]
     ds["time_sar"] = xr.DataArray(
         [
             datetime.datetime.strptime(
