@@ -117,14 +117,15 @@ if __name__ == "__main__":
                 for dd in rrule.rrule(rrule.DAILY, dtstart=sta, until=sto):
                     if args.overwrite:
                         fid.write(
-                            "{} {} {} {} --redo\n".format(
+                            "--startdate {}  --sat {} --alt {} --outputdir {} --redo\n".format(
                                 dd.strftime("%Y%m%d"), sarunit, satalti, args.outputdir
                             )
                         )
                     else:
                         fid.write(
-                            "%s %s %s %s\n"
-                            % (dd.strftime("%Y%m%d"), sarunit, satalti, args.outputdir)
+                            "--startdate {}  --sat {} --alt {} --outputdir {}\n".format(
+                                dd.strftime("%Y%m%d"), sarunit, satalti, args.outputdir
+                            )
                         )
                     cpt += 1
         fid.close()
