@@ -1,3 +1,5 @@
+import os
+import tempfile
 from collections import defaultdict
 from unittest.mock import patch
 
@@ -16,8 +18,8 @@ class TestTreatSafe:
     def mock_inputs(self):
         """Standard inputs for the function."""
         return {
-            "safewv": "/tmp/S1A_TEST.SAFE",
-            "path_altimeter": "/tmp/alti",
+            "safewv": os.path.join(tempfile.gettempdir(), "S1A_TEST.SAFE"),
+            "path_altimeter": os.path.join(tempfile.gettempdir(), "alti"),
             "altidb": "cmems",
             "acronym_alti_path_ifr": "j3",
             "swh_varname": "VAVH",

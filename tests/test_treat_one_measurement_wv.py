@@ -1,4 +1,6 @@
 import datetime
+import os
+import tempfile
 from collections import defaultdict
 from unittest.mock import MagicMock, patch
 
@@ -34,7 +36,7 @@ class TestTreatMeasurement:
             "coloc_listing": {},
             "dict4colocs": defaultdict(list),
             "cpt": defaultdict(int),
-            "path_altimeter": "/tmp/alti",
+            "path_altimeter": os.path.join(tempfile.gettempdir(), "alti"),
             "acronym_alti_path_ifr": "j3",
             "swh_varname": "VAVH",
         }

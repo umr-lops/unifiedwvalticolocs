@@ -1,4 +1,5 @@
 import datetime
+import tempfile
 from unittest.mock import patch
 
 import numpy as np
@@ -129,7 +130,7 @@ class TestSteps:
         files = step_1_temp_match(
             date_sar_dt=date_sar,
             delta_t_sat=3,
-            path_altimeters="/tmp",
+            path_altimeters=tempfile.gettempdir(),
             acro_alti="jason-3",
             altidb="cci",
         )

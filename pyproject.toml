@@ -3,32 +3,35 @@
 requires = ["poetry_core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry]
+
+[project]
 name = "unifiedwvalticolocs"
-version = "2026.1.27"
 description = "lib python to generate colocs S1 WV with CMEMS or CCI seatstate altimeters"
 readme = "README.md"
-authors = ["umr-lops <antoine.grouazel@ifremer.fr>"]
 license = "MIT"
+authors = [
+  { name = "umr-lops", email = "antoine.grouazel@ifremer.fr" }
+]
+dependencies = [
+    "xarray==2025.12.0",
+    "pandas==3.0.0",
+    "tqdm==4.67.1",
+    "scipy==1.17.0",
+    "s1ifr"
+]
+requires-python = ">=3.11,<4.0"
+# Keywords description https://python-poetry.org/docs/pyproject/#keywords
+keywords = ["colocation","sentinel1","altimeters","CMEMS","Level-2","ocean","SWH","WV"]
+dynamic = ["version", "classifiers"]
+
+[project.urls]
 repository = "https://github.com/umr-lops/unifiedwvalticolocs"
 homepage = "https://github.com/umr-lops/unifiedwvalticolocs"
 
-# Keywords description https://python-poetry.org/docs/pyproject/#keywords
-keywords = ["colocation","sentinel1","altimeters","CMEMS","Level-2","ocean","SWH","WV"]
+[tool.poetry]
+version = "2026.1.27"
 
-# Pypi classifiers: https://pypi.org/classifiers/
-classifiers = [  #! Update me
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Developers",
-  "Operating System :: OS Independent",
-  "Topic :: Software Development :: Libraries :: Python Modules",
-  "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-]
+
 
 [[tool.poetry.source]]
 name = "ifremer"
@@ -36,13 +39,8 @@ url = "https://gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple"
 priority = "supplemental"  # or "explicit"
 
 [tool.poetry.dependencies]
-python = "^3.11"
-xarray = "2025.12.0"
-pandas = '3.0.0'
-tqdm = "4.67.1"
-scipy = "1.17.0"
 s1ifr = {version = "2026.1.29", source = "ifremer"}
-# s1ifr = "2026.1.13"
+
 
 
 [tool.poetry.group.dev.dependencies]
@@ -154,5 +152,5 @@ source = ["unifiedwvalticolocs"]
 fail_under = 50
 show_missing = true
 
-[tool.poetry.scripts]
+[project.scripts]
 procunifiedwvalticolocs = "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci:entrypoint"

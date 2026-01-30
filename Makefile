@@ -57,8 +57,14 @@ mypy:
 .PHONY: check-safety
 check-safety:
 	poetry check
+	poetry run bandit -ll --recursive unifiedwvalticolocs tests
+
+.PHONY: check-safety-full
+check-safety-full:
+	poetry check
 	poetry run safety scan --full-report
 	poetry run bandit -ll --recursive unifiedwvalticolocs tests
+
 
 .PHONY: lint
 lint: test check-codestyle mypy check-safety
