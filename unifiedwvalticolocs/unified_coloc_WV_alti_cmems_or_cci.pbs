@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+#PBS -l walltime=19:40:00
+#PBS -l mem=5g
+#PBS -N unifiedcolocAltiWV
+#PBS -m n
+
+# Configuration
+singularityexe=/appli/singularity/3.6.4/bin/singularity
+optssimg="run -B /home/ref-cersat-public -B /home/ref-cmems-public -B /raid/ -B /home/datawork-cersat-public"
+imagname=/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post3.sif
+
+# Default values
+STARTDATE=""
+SAT=""
+ALT=""
+OUTPUTDIR=""
+REDO=""
+DEV=""
+
+# Function to display help
+usage() {
+    echo "Usage: $(basename "$0") [options]"
+    echo ""
+    echo "Required Arguments:"
+    echo "  -d, --startdate DATE   The start date for processing (e.g., 2024-01-01)"
+    echo "  -s, --sat SATELLITE    The satellite name"
+    echo "  -a, --alt ALTIMETER    The altimeter name"
+    echo "  -o, --outputdir DIR    The directory where results will be saved"
+    echo ""
+    echo "Options:"
+    echo "  --redo                 Enable overwrite mode (forces reprocessing)"
+    echo "  --dev                  Enable developer mode"
+    echo "  -h, --help             Show this help message and exit"
+    echo ""
+    echo "Example:"
+    echo "  $(basename "$0") --startdate 2024-01-01 --sat S1A --alt ALTI --outputdir ./results --redo"
+}
+
+# Parse Command Line Arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--startdate) STARTDATE="$2"; shift 2 ;;
+        -s|--sat)       SAT="$2";       shift 2 ;;
+        -a|--alt)       ALT="$2";       shift 2 ;;
+        -o|--outputdir) OUTPUTDIR="$2"; shift 2 ;;
+        --redo)         REDO="--redo";  shift 1 ;;
+        --dev)          DEV="--dev";    shift 1 ;;
+        -h|--help)      usage;          exit 0 ;;
+        *) echo "Unknown option: $1"; usage; exit 1 ;;
+    esac
+done
+
+# Validation: Check if required arguments are provided
+if [[ -z "$STARTDATE" || -z "$SAT" || -z "$ALT" || -z "$OUTPUTDIR" ]]; then
+    echo "Error: Missing required arguments."
+    usage
+    exit 1
+fi
+
+echo "--- Run Configuration ---"
+echo "Start Date: $STARTDATE"
+echo "Satellite:  $SAT"
+echo "Altimeter:  $ALT"
+echo "Output Dir: $OUTPUTDIR"
+[[ -n "$REDO" ]] && echo "Redo:       ON" || echo "Redo:       OFF"
+[[ -n "$DEV" ]]  && echo "Dev Mode:   ON" || echo "Dev Mode:   OFF"
+echo "-------------------------"
+
+# Execution
+$singularityexe $optssimg $imagname procunifiedwvalticolocs \
+    --outputdir "$OUTPUTDIR" \
+    --startdate "$STARTDATE" \
+    --sat "$SAT" \
+    --alt "$ALT" \
+    $REDO \
+    $DEV
+
+echo "end of python script exe"
