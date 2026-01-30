@@ -17,6 +17,7 @@ dependencies = [
     "pandas==3.0.0",
     "tqdm==4.67.1",
     "scipy==1.17.0",
+    "h5netcdf==1.8.1",
     "s1ifr"
 ]
 requires-python = ">=3.11,<4.0"

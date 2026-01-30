@@ -36,7 +36,9 @@ RUN if [ "$INSTALL_DEV" = "true" ] ; then poetry install --no-root ; else poetry
 COPY . .
 
 # 8. Install the project itself
-RUN poetry install --without dev
+# RUN poetry install --without dev
+RUN poetry build -f wheel && \
+    pip install dist/*.whl
 
 # 9. Verify installation
 RUN which procunifiedwvalticolocs
