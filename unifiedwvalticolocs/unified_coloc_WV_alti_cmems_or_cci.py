@@ -68,6 +68,7 @@ PATH_ALT = {
     "cci": "/home/ref-cersat-public/ocean-waves/cci-seastate/v4/",
     # v4 followed by v4/data/satellite/altimeter/l2p/
 }
+
 DIR_OUT_ROOT = "/home/datawork-cersat-public/cache/project/mpc-sentinel1"
 DIR_OUT_SUBDIRS = "analysis/s1_data_analysis/hs_nn/unified_colocs_wv_alti"
 DIR_OUTPUT = os.path.join(DIR_OUT_ROOT, DIR_OUT_SUBDIRS)
@@ -1303,6 +1304,9 @@ def entrypoint():
         os.path.basename(__file__),
     )
     logging.info("development/test mode activated: %s", args.dev)
+    assert os.path.exists(path_SAR)
+    assert os.path.exists(PATH_ALT["cmems"])
+    assert os.path.exists(PATH_ALT["cci"])
     cpt = core_coloc(
         sarunit=args.sat,
         alt=args.alt,
