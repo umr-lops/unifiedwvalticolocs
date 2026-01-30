@@ -130,17 +130,34 @@ if __name__ == "__main__":
         fid.close()
     logging.info("listing ready : %s nb lines : %s", listing, cpt)
     # call prun
-    # opts = ' --split-max-lines=10 --name HsCCIcoloc --background -e '
-    opts = " --split-max-lines=%s --background -e " % (
-        np.ceil(cpt / 9900.0).astype(int)
-    )  # to respect prun constraint on the number max of sublistings 10000
+    # 1. Calculate the split value
+    split_lines = str(int(np.ceil(cpt / 9900.0)))
+
+    # 2. Get the absolute path of the pbs script
     pbs = os.path.abspath(
         os.path.join(
             os.path.dirname(__file__), "unified_coloc_WV_alti_cmems_or_cci.pbs"
         )
     )
     assert os.path.exists(pbs)
-    cmd = prunexe + opts + pbs + " " + listing
-    logging.info("cmd to cast = %s", cmd)
-    st = subprocess.check_call(cmd, shell=True)
-    logging.info("status cmd = %s", st)
+
+    # 3. Construct the command as a clean list
+    # Every space-separated argument must be its own item in the list
+    cmd = [
+        prunexe,
+        "--split-max-lines=" + split_lines,
+        "--background",
+        "-e",
+        pbs,
+        listing,
+    ]
+
+    logging.info("cmd to cast = %s", " ".join(cmd))
+
+    # 4. Execute with shell=False (Bandit compliant)
+    try:
+        st = subprocess.check_call(cmd, shell=False)
+        logging.info("status cmd = %s", st)
+    except subprocess.CalledProcessError as e:
+        logging.error("Command failed with return code %s", e.returncode)
+        raise
