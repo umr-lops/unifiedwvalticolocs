@@ -1141,7 +1141,10 @@ def core_coloc(
     altidb = alt.split("_")[0]
 
     path_altimeter, acronym_alti_path_ifr, swh_varname = get_path_alti(altidb, alt)
+
     logging.info("path_altimeter : %s", path_altimeter)
+    assert os.path.exists(path_altimeter)
+    assert os.path.exists(path_SAR)
     long_name_sar_unit = "sentinel-1" + sarunit[-1].lower()
     pattern_sar = os.path.join(
         path_SAR,
@@ -1304,9 +1307,6 @@ def entrypoint():
         os.path.basename(__file__),
     )
     logging.info("development/test mode activated: %s", args.dev)
-    assert os.path.exists(path_SAR)
-    assert os.path.exists(PATH_ALT["cmems"])
-    assert os.path.exists(PATH_ALT["cci"])
     cpt = core_coloc(
         sarunit=args.sat,
         alt=args.alt,
