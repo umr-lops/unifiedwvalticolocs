@@ -117,7 +117,7 @@ if __name__ == "__main__":
                 for dd in rrule.rrule(rrule.DAILY, dtstart=sta, until=sto):
                     if args.overwrite:
                         fid.write(
-                            "{} {} {} {} --overwrite\n".format(
+                            "{} {} {} {} --redo\n".format(
                                 dd.strftime("%Y%m%d"), sarunit, satalti, args.outputdir
                             )
                         )
