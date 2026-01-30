@@ -6,7 +6,8 @@
 
 # Configuration
 singularityexe=/appli/singularity/3.6.4/bin/singularity
-optssimg="run -B /home/ref-cersat-public -B /home/ref-cmems-public -B /raid/ -B /home/datawork-cersat-public"
+# optssimg="run -B /home/ref-cersat-public -B /home/ref-cmems-public -B /raid/ -B /home/datawork-cersat-public"
+optssimg="run -B /home/ref-cersat-public -B /home/ref-cmems-public -B /home/datawork-cersat-public"
 imagname=/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post3.sif
 
 # Default values
