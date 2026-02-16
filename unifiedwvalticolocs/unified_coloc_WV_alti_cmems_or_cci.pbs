@@ -6,9 +6,10 @@
 
 # Configuration
 singularityexe=/appli/singularity/3.6.4/bin/singularity
-# optssimg="run -B /home/ref-cersat-public -B /home/ref-cmems-public -B /raid/ -B /home/datawork-cersat-public"
 optssimg="run -B /home/ref-cersat-public -B /home/ref-cmems-public -B /home/datawork-cersat-public"
-imagname=/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post3.sif
+
+# --- UPDATED: Default value for image ---
+IMAGNAME="/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post4.sif"
 
 # Default values
 STARTDATE=""
@@ -29,12 +30,13 @@ usage() {
     echo "  -o, --outputdir DIR    The directory where results will be saved"
     echo ""
     echo "Options:"
+    echo "  -i, --image SIF_FILE   Path to the SIF image (default: $IMAGNAME)"
     echo "  --redo                 Enable overwrite mode (forces reprocessing)"
     echo "  --dev                  Enable developer mode"
     echo "  -h, --help             Show this help message and exit"
     echo ""
     echo "Example:"
-    echo "  $(basename "$0") --startdate 2024-01-01 --sat S1A --alt ALTI --outputdir ./results --redo"
+    echo "  $(basename "$0") --startdate 2024-01-01 --sat S1A --alt ALTI --outputdir ./results --image ./custom.sif"
 }
 
 # Parse Command Line Arguments
@@ -44,6 +46,7 @@ while [[ $# -gt 0 ]]; do
         -s|--sat)       SAT="$2";       shift 2 ;;
         -a|--alt)       ALT="$2";       shift 2 ;;
         -o|--outputdir) OUTPUTDIR="$2"; shift 2 ;;
+        -i|--image)     IMAGNAME="$2";  shift 2 ;; # --- UPDATED: Parse image argument ---
         --redo)         REDO="--redo";  shift 1 ;;
         --dev)          DEV="--dev";    shift 1 ;;
         -h|--help)      usage;          exit 0 ;;
@@ -63,12 +66,14 @@ echo "Start Date: $STARTDATE"
 echo "Satellite:  $SAT"
 echo "Altimeter:  $ALT"
 echo "Output Dir: $OUTPUTDIR"
+echo "Image SIF:  $IMAGNAME" # Added to log
 [[ -n "$REDO" ]] && echo "Redo:       ON" || echo "Redo:       OFF"
 [[ -n "$DEV" ]]  && echo "Dev Mode:   ON" || echo "Dev Mode:   OFF"
 echo "-------------------------"
 
 # Execution
-$singularityexe $optssimg $imagname procunifiedwvalticolocs \
+# Using $IMAGNAME variable instead of the hardcoded path
+$singularityexe $optssimg "$IMAGNAME" procunifiedwvalticolocs \
     --outputdir "$OUTPUTDIR" \
     --startdate "$STARTDATE" \
     --sat "$SAT" \
