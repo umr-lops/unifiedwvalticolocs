@@ -9,6 +9,9 @@ import numpy as np
 from dateutil import rrule
 
 DEFAULT_OUTD = "/home1/scratch/satwave/unified_WV_alti_colocs"
+# --- ADDED: Default SIF Image Path ---
+DEFAULT_SIF = "/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post4.sif"
+
 all_altis = [
     "cmems_SARAL",
     "cmems_cryosat-2",
@@ -20,14 +23,15 @@ all_altis = [
     "cmems_HY2C",
     "cmems_Sentinel-6A",
     "cmems_SWOT-Nadir",
-    "cci_cryosat-2",  # 2018 - 2023
-    "cci_jason-2",  # 2009 - 2018
-    "cci_jason-3",  # 2018 - 2023
-    "cci_sentinel-3a",  # 2018 - 2023
-    "cci_sentinel-3b",  # 2018 - 2023
-    "cci_saral",  # 2013 - 2024
-    "cci_sentinel-6",  # 2020 - 2023
+    "cci_cryosat-2",
+    "cci_jason-2",
+    "cci_jason-3",
+    "cci_sentinel-3a",
+    "cci_sentinel-3b",
+    "cci_saral",
+    "cci_sentinel-6",
 ]
+
 if __name__ == "__main__":
     root = logging.getLogger()
     if root.handlers:
@@ -46,8 +50,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--listing",
         required=False,
-        help="listing for PRUN [optional, if None -> it is written on the fly,"
-        " otherwise the listing should be already filled] ",
+        help="listing for PRUN [optional]",
         default=None,
     )
     parser.add_argument(
@@ -62,75 +65,87 @@ if __name__ == "__main__":
         default=DEFAULT_OUTD,
         help="path where to store output coloc (.nc) [default=%s]" % DEFAULT_OUTD,
     )
+    # --- ADDED: Argument for SIF Image ---
+    parser.add_argument(
+        "--image",
+        required=False,
+        default=DEFAULT_SIF,
+        help="Path to the SIF image [default=%s]" % DEFAULT_SIF,
+    )
     parser.add_argument(
         "--alt",
         required=False,
         type=str,
-        help="which altimeter you want to specificaly treat, example: "
-        "'cmems_al' or 'cmems_c2' [default=all alti available]",
+        help="which altimeter you want to specifically treat [default=all]",
         default=all_altis,
     )
     args = parser.parse_args()
 
     if args.verbose:
         logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(asctime)s %(levelname)-5s %(message)s",
-            datefmt="%d/%m/%Y %H:%M:%S",
+            level=logging.DEBUG, format="%(asctime)s %(levelname)-5s %(message)s"
         )
     else:
         logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s %(levelname)-5s %(message)s",
-            datefmt="%d/%m/%Y %H:%M:%S",
+            level=logging.INFO, format="%(asctime)s %(levelname)-5s %(message)s"
         )
+
     if not isinstance(args.alt, list):
         alti_chosen = [args.alt]
     else:
         alti_chosen = args.alt
+
     logging.info("alti chosen: %s", args.alt)
+    logging.info("image chosen: %s", args.image)
+
     prunexe = "/appli/prun/bin/prun"
-    # listing below is written on the fly
+
     if args.listing:
-        listing = args.listing  # added for daily coloc with satwave/prun
+        listing = args.listing
         cpt = len(open(listing).readlines())
     else:
         listing = (
             "/home1/scratch/satwave/listing_coloc_CMEMS_CCI_Alti_WV_S1_CCI_prun.txt"
         )
+
         if args.start:
             sta = datetime.datetime.strptime(args.start, "%Y%m%d")
         else:
-            # sta = datetime.datetime(2019,10,1)
-            # sta = datetime.datetime(2019, 7, 16)
-            # dataset-wav-alti-l3-swh-rt-global-cfo start before
             sta = datetime.datetime(2014, 4, 1)
+
         if args.stop:
             sto = datetime.datetime.strptime(args.stop, "%Y%m%d")
         else:
             sto = datetime.datetime.today()
+
         fid = open(listing, "w")
         cpt = 0
 
         for sarunit in ["S1A", "S1B", "S1C", "S1D"]:
             for satalti in alti_chosen:
                 for dd in rrule.rrule(rrule.DAILY, dtstart=sta, until=sto):
+                    # --- UPDATED: Construct the command line for the listing ---
+                    # We add --image to the line written in the listing file
+                    cmd_line = (
+                        "--startdate %s --sat %s --alt %s --outputdir %s --image %s"
+                        % (
+                            dd.strftime("%Y%m%d"),
+                            sarunit,
+                            satalti,
+                            args.outputdir,
+                            args.image,
+                        )
+                    )
+
                     if args.overwrite:
-                        fid.write(
-                            "--startdate {}  --sat {} --alt {} --outputdir {} --redo\n".format(
-                                dd.strftime("%Y%m%d"), sarunit, satalti, args.outputdir
-                            )
-                        )
-                    else:
-                        fid.write(
-                            "--startdate {}  --sat {} --alt {} --outputdir {}\n".format(
-                                dd.strftime("%Y%m%d"), sarunit, satalti, args.outputdir
-                            )
-                        )
+                        cmd_line += " --redo"
+
+                    fid.write(cmd_line + "\n")
                     cpt += 1
         fid.close()
+
     logging.info("listing ready : %s nb lines : %s", listing, cpt)
-    # call prun
+
     # 1. Calculate the split value
     split_lines = str(int(np.ceil(cpt / 9900.0)))
 
@@ -143,7 +158,6 @@ if __name__ == "__main__":
     assert os.path.exists(pbs)
 
     # 3. Construct the command as a clean list
-    # Every space-separated argument must be its own item in the list
     cmd = [
         prunexe,
         "--split-max-lines=" + split_lines,
@@ -155,7 +169,7 @@ if __name__ == "__main__":
 
     logging.info("cmd to cast = %s", " ".join(cmd))
 
-    # 4. Execute with shell=False (Bandit compliant)
+    # 4. Execute
     try:
         st = subprocess.check_call(cmd, shell=False)
         logging.info("status cmd = %s", st)
