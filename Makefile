@@ -10,11 +10,11 @@ VERSION := latest
 #* Poetry
 .PHONY: poetry-download
 poetry-download:
-	curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | $(PYTHON) -
+	$(PYTHON) -m pip install poetry
 
 .PHONY: poetry-remove
 poetry-remove:
-	curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | $(PYTHON) - --uninstall
+	$(PYTHON) -m pip uninstall -y poetry
 
 #* Installation
 .PHONY: install
@@ -47,6 +47,7 @@ test:
 check-codestyle:
 	poetry run isort --diff --check-only --settings-path pyproject.toml ./
 	poetry run black --diff --check --config pyproject.toml ./
+	poetry run flake8 --config setup.cfg unifiedwvalticolocs/ tests/
 	poetry run darglint --verbosity 2 unifiedwvalticolocs tests
 
 .PHONY: mypy
@@ -56,8 +57,14 @@ mypy:
 .PHONY: check-safety
 check-safety:
 	poetry check
-	poetry run safety check --full-report
 	poetry run bandit -ll --recursive unifiedwvalticolocs tests
+
+.PHONY: check-safety-full
+check-safety-full:
+	poetry check
+	poetry run safety scan --full-report
+	poetry run bandit -ll --recursive unifiedwvalticolocs tests
+
 
 .PHONY: lint
 lint: test check-codestyle mypy check-safety
@@ -75,7 +82,8 @@ docker-build:
 	@echo Building docker $(IMAGE):$(VERSION) ...
 	docker build \
 		-t $(IMAGE):$(VERSION) . \
-		-f ./docker/Dockerfile --no-cache
+		-f ./docker/Dockerfile --no-cache \
+	        --build-arg CI_JOB_TOKEN=${CI_JOB_TOKEN}
 
 # Example: make docker-remove VERSION=latest
 # Example: make docker-remove IMAGE=some_name VERSION=2026.1.27
