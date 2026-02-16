@@ -3,59 +3,67 @@
 requires = ["poetry_core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry]
+
+[project]
 name = "unifiedwvalticolocs"
-version = "2026.1.27"
 description = "lib python to generate colocs S1 WV with CMEMS or CCI seatstate altimeters"
 readme = "README.md"
-authors = ["umr-lops <antoine.grouazel@ifremer.fr>"]
 license = "MIT"
+authors = [
+  { name = "umr-lops", email = "antoine.grouazel@ifremer.fr" }
+]
+dependencies = [
+    "xarray==2025.12.0",
+    "pandas==3.0.0",
+    "tqdm==4.67.1",
+    "scipy==1.17.0",
+    "h5netcdf==1.8.1",
+    "s1ifr",
+    "h5py (>=3.15.1,<4.0.0)",
+    "dask (>=2026.1.1,<2027.0.0)"
+]
+requires-python = ">=3.11,<4.0"
+# Keywords description https://python-poetry.org/docs/pyproject/#keywords
+keywords = ["colocation","sentinel1","altimeters","CMEMS","Level-2","ocean","SWH","WV"]
+dynamic = ["version", "classifiers"]
+
+[project.urls]
 repository = "https://github.com/umr-lops/unifiedwvalticolocs"
 homepage = "https://github.com/umr-lops/unifiedwvalticolocs"
 
-# Keywords description https://python-poetry.org/docs/pyproject/#keywords
-keywords = []  #! Update me
-
-# Pypi classifiers: https://pypi.org/classifiers/
-classifiers = [  #! Update me
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Developers",
-  "Operating System :: OS Independent",
-  "Topic :: Software Development :: Libraries :: Python Modules",
-  "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
-]
+[tool.poetry]
+version = "2026.1.27"
 
 
+
+[[tool.poetry.source]]
+name = "ifremer"
+url = "https://gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple"
+priority = "supplemental"  # or "explicit"
 
 [tool.poetry.dependencies]
-python = "^3.9"
-xarray = "2025.12.0"
-pandas = '3.0.0'
-tqdm = "4.67.1"
-netcdf4 = "1.7.4"
-scipy = "1.17.0"
-s1ifr = "2026.1.13"
+s1ifr = {version = "2026.1.29", source = "ifremer"}
 
 
-[tool.poetry.dev-dependencies]
-bandit = "^1.7.1"
-black = {version = "^21.10b0", allow-prereleases = true}
-darglint = "^1.8.1"
-isort = {extras = ["colors"], version = "^5.10.1"}
-mypy = "^0.910"
-mypy-extensions = "^0.4.3"
-pre-commit = "^2.15.0"
-pydocstyle = "^6.1.1"
-pylint = "^2.11.1"
-pytest = "^6.2.5"
-pyupgrade = "^2.29.1"
-safety = "^1.10.3"
-coverage = "^6.1.2"
-coverage-badge = "^1.1.0"
-pytest-html = "^3.1.1"
-pytest-cov = "^3.0.0"
+
+[tool.poetry.group.dev.dependencies]
+bandit = "^1.9.3"
+black = {version = "^26.1.0", allow-prereleases = true}  # Version 26 doesn't exist yet; 24.x is current stable
+darglint = "^1.8.1" # Warning: Project is unmaintained, 1.8.1 is the last version
+flake8 = "7.3.0"
+isort = {extras = ["colors"], version = "^7.0.0"}
+mypy = "^1.19.1"
+mypy-extensions = "^1.0.0"
+pre-commit = "^4.5.1"
+pydocstyle = "^6.3.0"
+pylint = "^4.0.4"
+pytest = "^9.0.2"
+pyupgrade = "^3.21.2"
+safety = "^3.7.0"
+coverage = "^7.13.2"
+coverage-badge = "^1.1.2"
+pytest-html = "^4.2.0"
+pytest-cov = "^7.0.0"
 
 [tool.black]
 # https://github.com/psf/black
@@ -92,9 +100,12 @@ multi_line_output = 3
 indent = 4
 color_output = true
 
+[tool.pylint.format]
+max-line-length = 88
+
 [tool.mypy]
 # https://mypy.readthedocs.io/en/latest/config_file.html#using-a-pyproject-toml-file
-python_version = 3.9
+python_version = "3.11"
 pretty = true
 show_traceback = true
 color_output = true
@@ -135,13 +146,14 @@ addopts = [
 
 [tool.coverage.run]
 source = ["tests"]
-
-[coverage.paths]
-source = "unifiedwvalticolocs"
-
-[coverage.run]
 branch = true
 
-[coverage.report]
+[tool.coverage.paths]
+source = ["unifiedwvalticolocs"]
+
+[tool.coverage.report]
 fail_under = 50
 show_missing = true
+
+[project.scripts]
+procunifiedwvalticolocs = "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci:entrypoint"
