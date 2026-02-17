@@ -172,7 +172,7 @@ def step_1_temp_match_cci(date_sar_dt, delta_t_sat, path_altimeters, acro_alti):
         final_list_alti += sorted(
             glob.glob(path_glob)
         )  # gather all ALT file within sta and sto range
-    logging.info("nb CCI files alti to read: %s", len(final_list_alti))
+    logging.debug("nb CCI files alti to read: %s", len(final_list_alti))
     logging.debug("output listing of alti: %s", final_list_alti)
     return final_list_alti
 
@@ -381,6 +381,7 @@ def read_all_alti_files(liste_altimeter_files, altidatabase):
     ds_alti = xr.open_mfdataset(
         liste_altimeter_files, combine="by_coords", preprocess=fctpreprocess
     )
+    ds_alti = ds_alti.drop_duplicates(dim="time")
     tmp_lons = copy.copy(ds_alti[lon_varname].values)
     mask_bad_lon = tmp_lons > 180
 
@@ -477,7 +478,7 @@ def step_3_closer_temp_match(sar_dataset, subset_alti, delta_t_sat_short, altidb
         lat_varname = "latitude"
     else:
         raise ValueError(error_altidb % altidb)
-
+    subset_ok_match_alti = None
     delta_t_closest_in_space = np.nan
     hs_alti_closest = np.nan
     delta_d_closest_in_space = np.nan
@@ -552,6 +553,7 @@ def step_3_closer_temp_match(sar_dataset, subset_alti, delta_t_sat_short, altidb
         closest_lat_alti,
         closest_time,
         list_alti_files_timespace_match,
+        subset_ok_match_alti,
     )
 
 
@@ -904,12 +906,12 @@ def treat_one_measurement_wv(
     list_date_sar_dt,
     sarunit,
     index_t_sar,
+    ds_alti,
+    tree_alti,
     altidb,
     coloc_listing,
     dict4colocs,
     cpt,
-    path_altimeter,
-    acronym_alti_path_ifr,
     swh_varname,
 ):
     """
@@ -921,91 +923,78 @@ def treat_one_measurement_wv(
         list_date_sar_dt (list): Contains the WV starting measurement dates.
         sarunit (str): S1A or S1B or ...
         index_t_sar (int): Index of SAR WV in the sards or list_date_sar_dt.
-        altidb (str): cmems or cci.
+        ds_alti (xr.Dataset): Altimeter data.
+        tree_alti (KDTree): KDTree for altimeter points.
+        altidb (str): Altimeter database name (e.g., 'cci' or '
         coloc_listing (dict): To store filepath (meta-coloc or pre-coloc).
         dict4colocs (dict): Contain the altimeters values.
         cpt (collection.defaultdict): Counter.
-        path_altimeter (str): Directory where altimeter files are stored.
-        acronym_alti_path_ifr (str): Acronym for folder path.
         swh_varname (str): Variable name for altimeter SWH.
 
     Returns:
         tuple: A tuple containing (dict4colocs, coloc_listing).
 
     """
-    ds_alti = None
     cpt["nb_index_sar_browsed"] += 1
     date_sar_dt = list_date_sar_dt[index_t_sar]
     fillpath_l1_wv_slc = get_original_wv_slc(date_sar_dt, sar_unit=sarunit)
     coloc_listing[fillpath_l1_wv_slc] = []
-    liste_step1 = step_1_temp_match(
-        date_sar_dt,
-        delta_t_sat,
-        path_altimeters=path_altimeter,
-        acro_alti=acronym_alti_path_ifr,
-        altidb=altidb,
+    subset_alti = step_2_geographic_match(
+        sards=sards,
+        ds_alti=ds_alti,
+        tree_alti=tree_alti,
     )
-    if len(liste_step1) > 0:
-        # this step is done only once because all the SAR obs
-        #  from a day will be associated to the same alti ds
-        ds_alti, tree_alti = read_all_alti_files(
-            liste_altimeter_files=liste_step1, altidatabase=altidb
+    if subset_alti is not None:
+        # if subset_alti["time"].values.size > 0:
+        (
+            list_alti_pts_matching_space_and_time,
+            delta_t_closest,
+            hs_alti_closest,
+            lat_alti,
+            lon_alti,
+            delta_d_closer,
+            closest_lon,
+            closest_lat,
+            closest_time,
+            list_alti_files_timespace_mu,
+            subset_ok_match_alti,
+        ) = step_3_closer_temp_match(
+            sar_dataset=sards,
+            subset_alti=subset_alti,
+            delta_t_sat_short=delta_t_sat_short,
+            altidb=altidb,
         )
-
-    if ds_alti:
-        subset_alti = step_2_geographic_match(
-            sards=sards,
-            ds_alti=ds_alti,
-            tree_alti=tree_alti,
-        )
-        if subset_alti is not None:
-            # if subset_alti["time"].values.size > 0:
-            (
-                list_alti_pts_matching_space_and_time,
-                delta_t_closest,
-                hs_alti_closest,
-                lat_alti,
-                lon_alti,
-                delta_d_closer,
-                closest_lon,
-                closest_lat,
-                closest_time,
-                list_alti_files_timespace_mu,
-            ) = step_3_closer_temp_match(
-                sar_dataset=sards,
-                subset_alti=subset_alti,
-                delta_t_sat_short=delta_t_sat_short,
-                altidb=altidb,
-            )
-            swh = subset_alti.sel(time=list_alti_pts_matching_space_and_time)[
-                swh_varname
-            ].values
+        if subset_ok_match_alti is not None:
+            swh = subset_ok_match_alti[swh_varname].values
             swh_count = len(swh)
+        else:
+            swh = np.array([])
+            swh_count = 0
 
-            if swh_count > 0:
-                # Use nanmean/nanstd to safely handle NaNs if present in the data
+        if swh_count > 0:
+            # Use a context manager to locally ignore the expected RuntimeWarnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="Degrees of freedom <= 0 for slice")
+                warnings.filterwarnings("ignore", message="Mean of empty slice")
+                
                 swh_mean = np.nanmean(swh)
                 swh_std = np.nanstd(swh)
-            else:
-                swh_mean = np.nan
-                swh_std = np.nan
-            if len(list_alti_pts_matching_space_and_time) > 0:
-                coloc_listing[fillpath_l1_wv_slc] = list_alti_files_timespace_mu
-                cpt["nb_index_sar_with_matching_alti"] += 1
-                dict4colocs["liste_lat_alt"].append(closest_lat)
-                dict4colocs["liste_lon_alt"].append(closest_lon)
-                dict4colocs["liste_time_alt"].append(closest_time)
-                dict4colocs["times_SAR"].append(date_sar_dt.replace(tzinfo=None))
-                dict4colocs["liste_count"].append(swh_count)
-                dict4colocs["liste_mean"].append(swh_mean)
-                dict4colocs["liste_std"].append(swh_std)
-                dict4colocs["liste_closest"].append(hs_alti_closest)
-                dict4colocs["liste_DELTA_T_closer"].append(delta_t_closest)
-                dict4colocs["liste_DELTA_D_closer"].append(delta_d_closer)
-
-    else:
-        cpt["nb_index_sar_without_alti_file_corresponding"] += 1
-        logging.debug("no files found")
+        else:
+            swh_mean = np.nan
+            swh_std = np.nan
+        if len(list_alti_pts_matching_space_and_time) > 0:
+            coloc_listing[fillpath_l1_wv_slc] = list_alti_files_timespace_mu
+            cpt["nb_index_sar_with_matching_alti"] += 1
+            dict4colocs["liste_lat_alt"].append(closest_lat)
+            dict4colocs["liste_lon_alt"].append(closest_lon)
+            dict4colocs["liste_time_alt"].append(closest_time)
+            dict4colocs["times_SAR"].append(date_sar_dt.replace(tzinfo=None))
+            dict4colocs["liste_count"].append(swh_count)
+            dict4colocs["liste_mean"].append(swh_mean)
+            dict4colocs["liste_std"].append(swh_std)
+            dict4colocs["liste_closest"].append(hs_alti_closest)
+            dict4colocs["liste_DELTA_T_closer"].append(delta_t_closest)
+            dict4colocs["liste_DELTA_D_closer"].append(delta_d_closer)
     return dict4colocs, coloc_listing, cpt
 
 
@@ -1024,15 +1013,20 @@ def treat_one_safe_wv(
 
     Colocate one SAFE OCN WV with altimeters
 
-    :param safewv: Description
-    :param path_altimeter: Description
-    :param altidb: Description
-    :param acronym_alti_path_ifr: Description
-    :param swh_varname: Description
-    :param coloc_listing: Description
-    :param cpt: Description
+    :param safewv: path to the SAFE OCN WV to process
+    :param path_altimeter: path where altimeter files are stored
+    :param altidb: name of the altimeter database to use (cci or cmems)
+    :param acronym_alti_path_ifr: acronym for folder path (e.g., "cryosat2" or "saral")
+    :param swh_varname: depending on the altimeter database, the variable name for significant wave height (e.g., "swh_denoised" for cci or "VAVH" for cmems)
+    :param coloc_listing: dictionary to store the listing of colocations (key: SAR file, value: list of altimeter files)
+    :param cpt: counter to keep track of various statistics (e.g., number of SAR indices with matching altimeter, number of SAR indices without corresponding altimeter files, etc.)
     :param dev: True -> break after finding few matchups
-    :param progressbar: Description
+    :param progressbar: True to show progressbar, False to disable it
+    :return:
+    tuple: (colocated_observations, coloc_listing, cpt)
+        colocated_observations: xarray.Dataset containing the colocated SAR and altimeter observations
+        coloc_listing: updated dictionary with the listing of colocations
+        cpt: updated counter with statistics about the colocation process
 
 
     """
@@ -1059,46 +1053,71 @@ def treat_one_safe_wv(
     sar_dataset_safe = xr.concat(tmpsarmeasu, dim="time_sar").load()
     logging.debug("all SAR files loaded")
     list_date_sar_dt = step_0_get_sar_dt(sards=sar_dataset_safe)
-    if progressbar:
-        iterratotor = tqdm(range(len(list_date_sar_dt)), desc="WV measurement")
-    else:
-        iterratotor = range(len(list_date_sar_dt))
-    for index_t_sar in iterratotor:  # loop over WV measurements
-        # treat a measurement wv here
-        dict4colocs, coloc_listing, cpt = treat_one_measurement_wv(
-            sar_dataset_safe.isel(time_sar=index_t_sar),
-            list_date_sar_dt,
-            sarunit,
-            index_t_sar=index_t_sar,
-            altidb=altidb,
-            coloc_listing=coloc_listing,
-            dict4colocs=dict4colocs,
-            cpt=cpt,
-            path_altimeter=path_altimeter,
-            acronym_alti_path_ifr=acronym_alti_path_ifr,
-            swh_varname=swh_varname,
-        )
-        if dev and cpt["nb_index_sar_with_matching_alti"] > MAX_NB_MATCHUPS_DEV_MODE:
-            logging.info("break loops over measurements after finding few matchups")
-            break
-    logging.debug("end of pair construction")
-    colocated_observations = sar_dataset_safe.sel(time_sar=dict4colocs["times_SAR"])
 
-    alti_colocated_ds = xr.Dataset()
-    for vv in dict4colocs:
-        if vv == "liste_time_alt":
-            valval = np.array(dict4colocs[vv]).astype("M8[ns]")
-        elif vv == "liste_DELTA_T_closer":
-            valval = np.array(dict4colocs[vv]).astype("m8[ns]")
-        else:
-            valval = np.array(dict4colocs[vv])
-        alti_colocated_ds[vv] = xr.DataArray(
-            valval,
-            dims=["time_sar"],
-            coords={"time_sar": colocated_observations["time_sar"].values},
+
+    # get all the altimeter files that are in the raw time window (delta_t_sat_long) around the SAR SAFE
+    # this step is done at SAFE level to avoid reading at each measurement the same alti files.
+    date_sar_safe_start_dt = datetime.datetime.strptime(
+        os.path.basename(safewv).split("_")[5], "%Y%m%dt%H%M%S"
+    )
+    list_alti_in_raw_time_window = step_1_temp_match(
+        date_sar_safe_start_dt,
+        delta_t_sat,
+        path_altimeters=path_altimeter,
+        acro_alti=acronym_alti_path_ifr,
+        altidb=altidb,
+    )
+    if len(list_alti_in_raw_time_window) > 0:
+        # this step is done only once because all the SAR obs
+        #  from a day will be associated to the same alti ds
+        ds_alti, tree_alti = read_all_alti_files(
+            liste_altimeter_files=list_alti_in_raw_time_window, altidatabase=altidb
         )
-    logging.debug("merge alti and SAR colocated values")
-    colocated_observations = xr.merge([colocated_observations, alti_colocated_ds])
+    if ds_alti:
+        cpt['nb_safe_with_alti_files'] += 1
+        if progressbar:
+            iterratotor = tqdm(range(len(list_date_sar_dt)), desc="WV measurement")
+        else:
+            iterratotor = range(len(list_date_sar_dt))
+        for index_t_sar in iterratotor:  # loop over WV measurements
+            # treat a measurement wv here
+            dict4colocs, coloc_listing, cpt = treat_one_measurement_wv(
+                sar_dataset_safe.isel(time_sar=index_t_sar),
+                list_date_sar_dt,
+                sarunit,
+                index_t_sar=index_t_sar,
+                ds_alti=ds_alti,
+                tree_alti=tree_alti,
+                altidb=altidb,
+                coloc_listing=coloc_listing,
+                dict4colocs=dict4colocs,
+                cpt=cpt,
+                swh_varname=swh_varname,
+            )
+            if dev and cpt["nb_index_sar_with_matching_alti"] > MAX_NB_MATCHUPS_DEV_MODE:
+                logging.info("break loops over measurements after finding few matchups")
+                break
+        logging.debug("end of pair construction")
+        colocated_observations = sar_dataset_safe.sel(time_sar=dict4colocs["times_SAR"])
+
+        alti_colocated_ds = xr.Dataset()
+        for vv in dict4colocs:
+            if vv == "liste_time_alt":
+                valval = np.array(dict4colocs[vv]).astype("M8[ns]")
+            elif vv == "liste_DELTA_T_closer":
+                valval = np.array(dict4colocs[vv]).astype("m8[ns]")
+            else:
+                valval = np.array(dict4colocs[vv])
+            alti_colocated_ds[vv] = xr.DataArray(
+                valval,
+                dims=["time_sar"],
+                coords={"time_sar": colocated_observations["time_sar"].values},
+            )
+        logging.debug("merge alti and SAR colocated values")
+        colocated_observations = xr.merge([colocated_observations, alti_colocated_ds])
+    else:
+        logging.info("no altimeter files found in the time window around the SAR SAFE")
+        cpt['nb_safe_without_alti_files'] += 1
     return colocated_observations, coloc_listing, cpt
 
 
