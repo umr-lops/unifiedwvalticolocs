@@ -176,7 +176,7 @@ class TestSteps:
             altidb="cmems",
         )
 
-        list_alti_pts, delta_t, hs_closest, _, _, _, _, _, _, _ = result
+        list_alti_pts, delta_t, hs_closest, _, _, _, _, _, _, _, _ = result
 
         assert len(list_alti_pts) == 1
         assert np.isclose(hs_closest, 2.5)

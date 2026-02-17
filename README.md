@@ -76,6 +76,7 @@ Poetry's [commands](https://python-poetry.org/docs/cli/#commands) are very intui
 - `poetry publish --build`
 
 etc
+
 </p>
 </details>
 
@@ -149,8 +150,6 @@ or install with `Poetry`
 ```bash
 poetry add unifiedwvalticolocs
 ```
-
-
 
 ### Makefile usage
 
