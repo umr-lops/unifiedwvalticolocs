@@ -32,7 +32,7 @@ repository = "https://github.com/umr-lops/unifiedwvalticolocs"
 homepage = "https://github.com/umr-lops/unifiedwvalticolocs"
 
 [tool.poetry]
-version = "2026.1.27"
+version = "2026.2.17"
 
 
 
