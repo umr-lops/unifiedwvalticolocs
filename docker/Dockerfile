@@ -36,9 +36,15 @@ RUN if [ "$INSTALL_DEV" = "true" ] ; then poetry install --no-root ; else poetry
 COPY . .
 
 # 8. Install the project itself
-# RUN poetry install --without dev
-RUN poetry build -f wheel && \
-    pip install dist/*.whl
+# We remove any existing dist folder copied from host,
+# then build a fresh wheel and install only that.
+# RUN rm -rf dist && \
+#     poetry build -f wheel && \
+#     pip install dist/*.whl
+
+# 8. Install the project itself (the "root" package)
+# This installs your package and its entry points (procunifiedwvalticolocs)
+RUN if [ "$INSTALL_DEV" = "true" ] ; then poetry install ; else poetry install --without dev ; fi
 
 # 9. Verify installation
 RUN which procunifiedwvalticolocs

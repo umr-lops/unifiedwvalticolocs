@@ -36,3 +36,8 @@ venv
 .AppleDouble
 .LSOverride
 ._*
+
+
+dist/
+build/
+*.egg-info/
