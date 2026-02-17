@@ -974,9 +974,11 @@ def treat_one_measurement_wv(
         if swh_count > 0:
             # Use a context manager to locally ignore the expected RuntimeWarnings
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", message="Degrees of freedom <= 0 for slice")
+                warnings.filterwarnings(
+                    "ignore", message="Degrees of freedom <= 0 for slice"
+                )
                 warnings.filterwarnings("ignore", message="Mean of empty slice")
-                
+
                 swh_mean = np.nanmean(swh)
                 swh_std = np.nanstd(swh)
         else:
@@ -1054,7 +1056,6 @@ def treat_one_safe_wv(
     logging.debug("all SAR files loaded")
     list_date_sar_dt = step_0_get_sar_dt(sards=sar_dataset_safe)
 
-
     # get all the altimeter files that are in the raw time window (delta_t_sat_long) around the SAR SAFE
     # this step is done at SAFE level to avoid reading at each measurement the same alti files.
     date_sar_safe_start_dt = datetime.datetime.strptime(
@@ -1074,7 +1075,7 @@ def treat_one_safe_wv(
             liste_altimeter_files=list_alti_in_raw_time_window, altidatabase=altidb
         )
     if ds_alti:
-        cpt['nb_safe_with_alti_files'] += 1
+        cpt["nb_safe_with_alti_files"] += 1
         if progressbar:
             iterratotor = tqdm(range(len(list_date_sar_dt)), desc="WV measurement")
         else:
@@ -1094,7 +1095,10 @@ def treat_one_safe_wv(
                 cpt=cpt,
                 swh_varname=swh_varname,
             )
-            if dev and cpt["nb_index_sar_with_matching_alti"] > MAX_NB_MATCHUPS_DEV_MODE:
+            if (
+                dev
+                and cpt["nb_index_sar_with_matching_alti"] > MAX_NB_MATCHUPS_DEV_MODE
+            ):
                 logging.info("break loops over measurements after finding few matchups")
                 break
         logging.debug("end of pair construction")
@@ -1117,7 +1121,7 @@ def treat_one_safe_wv(
         colocated_observations = xr.merge([colocated_observations, alti_colocated_ds])
     else:
         logging.info("no altimeter files found in the time window around the SAR SAFE")
-        cpt['nb_safe_without_alti_files'] += 1
+        cpt["nb_safe_without_alti_files"] += 1
     return colocated_observations, coloc_listing, cpt
 
 
