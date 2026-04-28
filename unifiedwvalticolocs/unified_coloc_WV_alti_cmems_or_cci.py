@@ -1085,6 +1085,7 @@ def treat_one_safe_wv(
                 dict4colocs=dict4colocs,
                 cpt=cpt,
                 swh_varname=swh_varname,
+                conf=conf,
             )
             if (
                 dev

@@ -20,7 +20,8 @@ dependencies = [
     "h5netcdf==1.8.1",
     "s1ifr",
     "h5py (>=3.15.1,<4.0.0)",
-    "dask (>=2026.1.1,<2027.0.0)"
+    "dask (>=2026.1.1,<2027.0.0)",
+    "pyyaml (>=6.0.3,<7.0.0)"
 ]
 requires-python = ">=3.11,<4.0"
 # Keywords description https://python-poetry.org/docs/pyproject/#keywords
@@ -157,3 +158,4 @@ show_missing = true
 
 [project.scripts]
 procunifiedwvalticolocs = "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci:entrypoint"
+create-unified-wv-alti-job-array-listing = "unifiedwvalticolocs.create_listing_jobarray:entrypoint"

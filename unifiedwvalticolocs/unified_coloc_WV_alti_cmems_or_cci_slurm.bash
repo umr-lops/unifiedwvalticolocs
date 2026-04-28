@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-#PBS -l walltime=19:40:00
-#PBS -l mem=5g
-#PBS -N unifiedcolocAltiWV
-#PBS -m n
+#SBATCH --time=19:40:00
+#SBATCH --mem=5G
+#SBATCH --job-name=unifiedcolocAltiWV
+#SBATCH --mail-type=NONE
 
 # Configuration
-singularityexe=/appli/singularity/3.6.4/bin/singularity
-optssimg="exec -B /home/ref-cersat-public -B /home/ref-cmems-public -B /home/datawork-cersat-public -B /home1 "
+optssimg="exec -B /scale/reference/ -B /legacy/project/cersat/public -B /scratch -B /ontap"
 
-# --- UPDATED: Default value for image ---
+# Default value for image
 IMAGNAME="/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post4.sif"
 
 # Default values
@@ -38,7 +37,11 @@ usage() {
     echo "  -h, --help             Show this help message and exit"
     echo ""
     echo "Example:"
-    echo "  $(basename "$0") --startdate 20240101 --sat S1A --alt ALTI --outputdir ./results --image ./custom.sif --config ./conf.yml"
+    echo "  sbatch $(basename "$0") --startdate 20240101 --sat S1A --alt cmems_Jason-3 --outputdir ./results --config ./conf.yml"
+    echo ""
+    echo "Note: SLURM directives (#SBATCH) at the top of the script can be"
+    echo "  overridden at submission time, e.g.:"
+    echo "  sbatch --time=02:00:00 --mem=8G $(basename "$0") ..."
 }
 
 # Parse Command Line Arguments
@@ -49,7 +52,7 @@ while [[ $# -gt 0 ]]; do
         -a|--alt)       ALT="$2";       shift 2 ;;
         -o|--outputdir) OUTPUTDIR="$2"; shift 2 ;;
         -c|--config)    CONFIG="$2";    shift 2 ;;
-        -i|--image)     IMAGNAME="$2";  shift 2 ;; # --- UPDATED: Parse image argument ---
+        -i|--image)     IMAGNAME="$2";  shift 2 ;;
         --redo)         REDO="--redo";  shift 1 ;;
         --dev)          DEV="--dev";    shift 1 ;;
         -h|--help)      usage;          exit 0 ;;
@@ -58,7 +61,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validation: Check if required arguments are provided
-if [[ -z "$STARTDATE" || -z "$SAT" || -z "$ALT" || -z "$OUTPUTDIR" || -z "$CONFIG"]]; then
+if [[ -z "$STARTDATE" || -z "$SAT" || -z "$ALT" || -z "$OUTPUTDIR" || -z "$CONFIG" ]]; then
     echo "Error: Missing required arguments."
     usage
     exit 1
@@ -70,14 +73,15 @@ echo "Satellite:  $SAT"
 echo "Altimeter:  $ALT"
 echo "Output Dir: $OUTPUTDIR"
 echo "Config:     $CONFIG"
-echo "Image SIF:  $IMAGNAME" # Added to log
+echo "Image SIF:  $IMAGNAME"
 [[ -n "$REDO" ]] && echo "Redo:       ON" || echo "Redo:       OFF"
 [[ -n "$DEV" ]]  && echo "Dev Mode:   ON" || echo "Dev Mode:   OFF"
+echo "SLURM Job ID:   ${SLURM_JOB_ID}"
+echo "SLURM Node:     ${SLURM_NODELIST}"
 echo "-------------------------"
 
 # Execution
-# Using $IMAGNAME variable instead of the hardcoded path
-$singularityexe $optssimg "$IMAGNAME" procunifiedwvalticolocs \
+apptainer $optssimg "$IMAGNAME" procunifiedwvalticolocs \
     --outputdir "$OUTPUTDIR" \
     --startdate "$STARTDATE" \
     --sat "$SAT" \
