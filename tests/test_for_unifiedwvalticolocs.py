@@ -7,7 +7,6 @@ import pytest
 import xarray as xr
 from scipy.spatial import KDTree
 
-# Adjust this import based on your actual package structure
 from unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci import (
     from_npdt64_to_dt,
     haversine,
@@ -96,7 +95,7 @@ class TestSteps:
         """Create a dummy Alti dataset."""
         # Alti time is 1 hour after SAR time
         times = [np.datetime64("2022-01-01T13:00:00")]
-        lats = [10.0]  # Same location
+        lats = [10.0]
         lons = [10.0]
         swh = [2.5]
         fname = ["dummy_alti.nc"]
@@ -121,12 +120,11 @@ class TestSteps:
 
     @patch("unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci.glob.glob")
     def test_step_1_temp_match_cci(self, mock_glob):
-        """Test file finding logic (CMEMS/CCI)."""
+        """Test file finding logic for CCI altimeter database."""
         mock_glob.return_value = ["file1.nc", "file2.nc"]
 
         date_sar = datetime.datetime(2022, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
 
-        # Test CCI path
         files = step_1_temp_match(
             date_sar_dt=date_sar,
             delta_t_sat=3,
@@ -135,12 +133,23 @@ class TestSteps:
             altidb="cci",
         )
 
-        # FIX: Expect 6 files because the loop runs for 3 days (Dec 31, Jan 1, Jan 2)
-        # and the mock returns 2 files per iteration.
+        # The loop runs for 3 days (Dec 31, Jan 1, Jan 2) and the mock returns
+        # 2 files per iteration, so we expect 6 files total.
         assert len(files) == 6
         assert "file1.nc" in files
-        # Verify glob was called
         assert mock_glob.called
+
+    def test_step_1_temp_match_invalid_altidb(self):
+        """Test that an invalid altidb raises a ValueError."""
+        date_sar = datetime.datetime(2022, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+        with pytest.raises(ValueError):
+            step_1_temp_match(
+                date_sar_dt=date_sar,
+                delta_t_sat=3,
+                path_altimeters=tempfile.gettempdir(),
+                acro_alti="jason-3",
+                altidb="unknown_db",
+            )
 
     def test_step_2_geographic_match(self, mock_sar_ds, mock_alti_ds):
         """Test KDTree spatial matching."""
@@ -148,27 +157,32 @@ class TestSteps:
         points_alt = np.c_[mock_alti_ds["latitude"], mock_alti_ds["longitude"]]
         tree = KDTree(points_alt)
 
-        # Run step 2
-        subset = step_2_geographic_match(mock_sar_ds, mock_alti_ds, tree)
+        # Run step 2 with a generous spatial window so the co-located points match
+        subset = step_2_geographic_match(
+            mock_sar_ds, mock_alti_ds, tree, delta_dist_degree=2.0
+        )
 
-        # Should match because coords are identical (10,10)
+        # Should match because SAR and alti coords are identical (10, 10)
         assert subset is not None
-        assert len(subset.time) == 1
+        assert len(subset["time"]) == 1
 
-        # Test no match scenario
-        # Move SAR far away
+    def test_step_2_geographic_match_no_match(self, mock_sar_ds, mock_alti_ds):
+        """Test that a SAR point far from all alti points returns None."""
+        points_alt = np.c_[mock_alti_ds["latitude"], mock_alti_ds["longitude"]]
+        tree = KDTree(points_alt)
+
+        # Move SAR far away so no alti point falls within the search radius
         mock_sar_ds["oswLat"] = (("time_sar",), [50.0])
-        subset_fail = step_2_geographic_match(mock_sar_ds, mock_alti_ds, tree)
+        subset_fail = step_2_geographic_match(
+            mock_sar_ds, mock_alti_ds, tree, delta_dist_degree=2.0
+        )
 
-        # step_2 returns None if query_ball_point is empty or length 0 logic
-        # Based on code: if len > 0 returns subset, else None
         assert subset_fail is None
 
     def test_step_3_closer_temp_match_success(self, mock_sar_ds, mock_alti_ds):
-        """Test exact time and space matching logic."""
-        delta_t_short = 3 * 3600  # 3 hours
+        """Test exact time and space matching logic: alti 1 h after SAR."""
+        delta_t_short = 3 * 3600  # 3-hour window
 
-        # Alti is at 13:00, SAR at 12:00 -> Diff 1h -> Should match
         result = step_3_closer_temp_match(
             sar_dataset=mock_sar_ds,
             subset_alti=mock_alti_ds,
@@ -180,14 +194,14 @@ class TestSteps:
 
         assert len(list_alti_pts) == 1
         assert np.isclose(hs_closest, 2.5)
-        # Delta T should be 3600 seconds (1 hour)
+        # Alti is 1 h *after* SAR, so delta_t = +3600 s
         assert delta_t == np.timedelta64(3600, "s")
 
     def test_step_3_closer_temp_match_fail_time(self, mock_sar_ds, mock_alti_ds):
-        """Test filtering out points outside time window."""
-        delta_t_short = 1800  # 30 minutes window
+        """Test filtering out points outside the time window (30-min window)."""
+        delta_t_short = 1800  # 30-minute window
 
-        # Alti is at 13:00, SAR at 12:00 -> Diff 1h -> Outside 30min window
+        # Alti is at 13:00, SAR at 12:00 → difference is 1 h → outside 30-min window
         result = step_3_closer_temp_match(
             sar_dataset=mock_sar_ds,
             subset_alti=mock_alti_ds,
@@ -197,30 +211,29 @@ class TestSteps:
 
         list_alti_pts = result[0]
         assert len(list_alti_pts) == 0
-        assert np.isnan(result[2])  # hs_closest should be nan
+        assert np.isnan(result[2])  # hs_closest should be NaN
 
     def test_step_3_date_arithmetic_fix(self):
         """
-        Specific test to ensure the 'date2num' fix works.
+        Verify that time-difference arithmetic works correctly when SAR and
+        alti times are identical (expected delta_t == 0 s).
         """
-        # Alti time exactly same
         times = [np.datetime64("2022-01-01T12:00:00")]
 
         ds_alti = xr.Dataset(
             {
-                "latitude": (("time",), [10.0]),  # <--- CHANGED to 10.0 (float)
-                "longitude": (("time",), [10.0]),  # <--- CHANGED to 10.0 (float)
+                "latitude": (("time",), [10.0]),
+                "longitude": (("time",), [10.0]),
                 "VAVH": (("time",), [2.0]),
                 "fname": (("time",), ["f.nc"]),
             },
             coords={"time": times},
         )
 
-        # FIX: Removed "time_sar" from the data dict, kept it only in coords
         ds_sar = xr.Dataset(
             {
-                "oswLat": (("time_sar",), [10.0]),  # <--- CHANGED to 10.0
-                "oswLon": (("time_sar",), [10.0]),  # <--- CHANGED to 10.0
+                "oswLat": (("time_sar",), [10.0]),
+                "oswLon": (("time_sar",), [10.0]),
             },
             coords={"time_sar": times},
         )

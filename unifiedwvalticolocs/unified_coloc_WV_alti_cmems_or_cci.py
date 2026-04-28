@@ -27,6 +27,8 @@ from s1ifr.get_full_path_from_measurement import (
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
+from unifiedwvalticolocs.utils import get_conf_content
+
 rng = np.random.default_rng(42)
 warnings.filterwarnings(
     "ignore",
@@ -46,22 +48,17 @@ warnings.filterwarnings(
     for slice",
 )
 
-path_SAR = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/data/esa/"
-subset_alti_name_dir = "cmems_obs-wave_glo_phy-swh_nrt_%s-l3_PT1S"
-cmems_dir = "/home/ref-cmems-public/tac/wave/WAVE_GLO_PHY_SWH_L3_NRT_014_001/"
-PATH_ALT = {
-    "cmems": os.path.join(cmems_dir, subset_alti_name_dir),
-    # "cci": "/home/datawork-cersat-public/provider/cci_seastate/products/v3/"
-    "cci": "/home/ref-cersat-public/ocean-waves/cci-seastate/v4/",
-    # v4 followed by v4/data/satellite/altimeter/l2p/
-}
+# path_SAR = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/data/esa/"
+# subset_alti_name_dir = "cmems_obs-wave_glo_phy-swh_nrt_%s-l3_PT1S"
+# cmems_dir = "/home/ref-cmems-public/tac/wave/WAVE_GLO_PHY_SWH_L3_NRT_014_001/"
 
-DIR_OUT_ROOT = "/home/datawork-cersat-public/cache/project/mpc-sentinel1"
-DIR_OUT_SUBDIRS = "analysis/s1_data_analysis/hs_nn/unified_colocs_wv_alti"
-DIR_OUTPUT = os.path.join(DIR_OUT_ROOT, DIR_OUT_SUBDIRS)
-delta_t_sat = 3  # hours
-delta_t_sat_short = 3 * 3600  # in seconds
-DELTA_DIST = 2  # degree
+
+# DIR_OUT_ROOT = "/home/datawork-cersat-public/cache/project/mpc-sentinel1"
+# DIR_OUT_SUBDIRS = "analysis/s1_data_analysis/hs_nn/unified_colocs_wv_alti"
+# DIR_OUTPUT = os.path.join(DIR_OUT_ROOT, DIR_OUT_SUBDIRS)
+# delta_t_sat = 3  # hours
+# delta_t_sat_short = 3 * 3600  # in seconds
+# DELTA_DIST = 2  # degree
 MAX_NB_MATCHUPS_DEV_MODE = 3
 error_altidb = "altidb %s not handled"
 t1 = time.time()
@@ -386,7 +383,7 @@ def read_all_alti_files(liste_altimeter_files, altidatabase):
     return subset_alti1, tree_alti
 
 
-def step_2_geographic_match(sards, ds_alti, tree_alti):
+def step_2_geographic_match(sards, ds_alti, tree_alti, delta_dist_degree):
     """
 
     get altimeter points that are within a radius around a set of WV images
@@ -399,7 +396,7 @@ def step_2_geographic_match(sards, ds_alti, tree_alti):
     subset_alti2 = None
     points_sar = np.c_[sards["oswLat"].values, sards["oswLon"].values]
 
-    queryballpoint = tree_alti.query_ball_point(points_sar, r=DELTA_DIST)
+    queryballpoint = tree_alti.query_ball_point(points_sar, r=delta_dist_degree)
     queryballpoint = np.array(queryballpoint[0])
     if len(queryballpoint) > 0:
         subset_alti2 = ds_alti.isel(time=queryballpoint)  # ['time'].values
@@ -900,6 +897,7 @@ def treat_one_measurement_wv(
     dict4colocs,
     cpt,
     swh_varname,
+    conf,
 ):
     """
 
@@ -917,6 +915,7 @@ def treat_one_measurement_wv(
         dict4colocs (dict): Contain the altimeters values.
         cpt (collection.defaultdict): Counter.
         swh_varname (str): Variable name for altimeter SWH.
+        conf (dict): Configuration parameters.
 
     Returns:
         tuple: A tuple containing (dict4colocs, coloc_listing).
@@ -930,6 +929,7 @@ def treat_one_measurement_wv(
         sards=sards,
         ds_alti=ds_alti,
         tree_alti=tree_alti,
+        delta_dist_degree=conf["DELTA_DIST"],
     )
     if subset_alti is not None:
         # if subset_alti["time"].values.size > 0:
@@ -948,7 +948,7 @@ def treat_one_measurement_wv(
         ) = step_3_closer_temp_match(
             sar_dataset=sards,
             subset_alti=subset_alti,
-            delta_t_sat_short=delta_t_sat_short,
+            delta_t_sat_short=conf["delta_t_sat_short"],
             altidb=altidb,
         )
         if subset_ok_match_alti is not None:
@@ -995,6 +995,7 @@ def treat_one_safe_wv(
     swh_varname,
     coloc_listing,
     cpt,
+    conf,
     dev=False,
     progressbar=True,
 ):
@@ -1009,6 +1010,7 @@ def treat_one_safe_wv(
     :param swh_varname: depending on the altimeter database, the variable name for significant wave height (e.g., "swh_denoised" for cci or "VAVH" for cmems)
     :param coloc_listing: dictionary to store the listing of colocations (key: SAR file, value: list of altimeter files)
     :param cpt: counter to keep track of various statistics (e.g., number of SAR indices with matching altimeter, number of SAR indices without corresponding altimeter files, etc.)
+    :param conf: configuration dictionary containing parameters like delta_t_sat, delta_t_sat_short, etc.
     :param dev: True -> break after finding few matchups
     :param progressbar: True to show progressbar, False to disable it
     :return:
@@ -1021,6 +1023,7 @@ def treat_one_safe_wv(
     """
     logging.debug("SAR Sentinel-1 WV SAFE to process : %s ", safewv)
     ds_alti = None
+    colocated_observations = xr.Dataset({"empty": (["time_sar"], [])})
     dict4colocs = {}
     dict4colocs["times_SAR"] = []  # list of SAR Datetime
     dict4colocs["liste_count"] = []  # list of wave
@@ -1051,7 +1054,7 @@ def treat_one_safe_wv(
     )
     list_alti_in_raw_time_window = step_1_temp_match(
         date_sar_safe_start_dt,
-        delta_t_sat,
+        conf["delta_t_sat"],
         path_altimeters=path_altimeter,
         acro_alti=acronym_alti_path_ifr,
         altidb=altidb,
@@ -1113,13 +1116,20 @@ def treat_one_safe_wv(
     return colocated_observations, coloc_listing, cpt
 
 
-def get_path_alti(altidb, alt):
+def get_path_alti(altidb, alt, conf):
     """
     get the path, acronym and Hs variable name of a specific
       altimeter for a given database (altidb)
 
 
     """
+    cmems_dir = conf["cmems_dir"]
+    subset_alti_name_dir = conf["subset_alti_name_dir"]
+    PATH_ALT = {
+        "cmems": os.path.join(cmems_dir, subset_alti_name_dir),
+        "cci": conf["cci_alti_dir"],
+        # v4 followed by v4/data/satellite/altimeter/l2p/
+    }
     if altidb == "cci":
         path_altimeter = os.path.join(PATH_ALT[altidb])
         swh_varname = "swh_denoised"
@@ -1139,7 +1149,14 @@ def get_path_alti(altidb, alt):
 
 
 def core_coloc(
-    startdate, alt, sarunit, outputdir, dev=False, redo=False, progressbar=False
+    startdate,
+    alt,
+    sarunit,
+    outputdir,
+    conf,
+    dev=False,
+    redo=False,
+    progressbar=False,
 ):
     """
 
@@ -1157,14 +1174,16 @@ def core_coloc(
     JY = date.strftime("%j")
     altidb = alt.split("_")[0]
 
-    path_altimeter, acronym_alti_path_ifr, swh_varname = get_path_alti(altidb, alt)
+    path_altimeter, acronym_alti_path_ifr, swh_varname = get_path_alti(
+        altidb, alt, conf=conf
+    )
 
     logging.info("path_altimeter : %s", path_altimeter)
     assert os.path.exists(path_altimeter)
-    assert os.path.exists(path_SAR)
+    assert os.path.exists(conf["path_SAR"])
     long_name_sar_unit = "sentinel-1" + sarunit[-1].lower()
     pattern_sar = os.path.join(
-        path_SAR,
+        conf["path_SAR"],
         long_name_sar_unit,
         "L2",
         "WV",
@@ -1187,9 +1206,9 @@ def core_coloc(
         + "_WV_"
         + alt
         + "_"
-        + str(delta_t_sat)
+        + str(conf["delta_t_sat"])
         + "_hours_"
-        + str(DELTA_DIST)
+        + str(conf["DELTA_DIST"])
         + "_degree.nc",
     )
     time.sleep(rng.integers(0, 10))
@@ -1221,6 +1240,7 @@ def core_coloc(
                 cpt=cpt,
                 dev=dev,
                 progressbar=progressbar,
+                conf=conf,
             )
             # if len(one_safe_colocs.time)>0 and len(one_safe_colocs.time_sar)>0:
             if len(one_safe_colocs.time_sar) > 0:
@@ -1255,9 +1275,9 @@ def core_coloc(
                     + "_WV_"
                     + alt
                     + "_"
-                    + str(delta_t_sat)
+                    + str(conf["delta_t_sat"])
                     + "_hours_"
-                    + str(DELTA_DIST)
+                    + str(conf["DELTA_DIST"])
                     + "_degree.lst",
                 )
                 write_coloc_listing(output_lst_file, coloc_listing, redo=redo)
@@ -1273,16 +1293,20 @@ def entrypoint():
         for handler in root.handlers:
             root.removeHandler(handler)
 
-    parser = argparse.ArgumentParser(description="example main")
+    parser = argparse.ArgumentParser(description="colocate S1 WV and altimeters")
     parser.add_argument("--verbose", action="store_true", default=False)
     parser.add_argument(
         "--outputdir",
-        default=DIR_OUTPUT,
-        help="folder where the data will be written [optional]",
-        required=False,
+        # default=DIR_OUTPUT,
+        help="folder where the co-location data (.nc) will be written",
+        required=True,
     )
-    parser.add_argument("--startdate", required=True, help="YYYYMMDD", type=str)
-    parser.add_argument("--sat", required=True, help="S1A or S1B...", type=str)
+    parser.add_argument(
+        "--startdate", required=True, help=" date to analyse: YYYYMMDD", type=str
+    )
+    parser.add_argument(
+        "--sat", required=True, help="mission SAR: S1A or S1B...", type=str
+    )
     parser.add_argument(
         "--alt",
         required=True,
@@ -1309,6 +1333,12 @@ def entrypoint():
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--config",
+        help="path to config file (yml) with parameters for the script. ",
+        type=str,
+        required=True,
+    )
     args = parser.parse_args()
     fmt = "%(asctime)s %(levelname)s %(filename)s(%(lineno)d) %(message)s"
     if args.verbose:
@@ -1324,6 +1354,7 @@ def entrypoint():
         os.path.basename(__file__),
     )
     logging.info("development/test mode activated: %s", args.dev)
+    config = get_conf_content(args.config)
     cpt = core_coloc(
         sarunit=args.sat,
         alt=args.alt,
@@ -1332,6 +1363,7 @@ def entrypoint():
         startdate=args.startdate,
         redo=args.redo,
         progressbar=args.progressbar,
+        conf=config,
     )
     logging.info("memory in Mo: %s", getrusage(RUSAGE_SELF).ru_maxrss / 1000.0)
     logging.info("counters: %s", cpt)
