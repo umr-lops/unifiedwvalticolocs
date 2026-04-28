@@ -45,21 +45,8 @@ warnings.filterwarnings(
     message="Degrees of freedom <= 0 \
     for slice",
 )
-# from find_closest_l2anad_in_time.py import find_all_l2anad_between_
-# start_and_stop_date
-# sys.path.append("/home1/datahome/satwave/sources_en_exploitation2/
-# cfosat-calval-exe/")
-# Input = '/home/datawork-cersat-public/project/cci-seastate/sandbox/data/sar/
-# v3.0/S1A_wv1/2021/001/S1A_wv1_20210101_level2_LOPS_SWH_SAR_v3.0.nc'
-# path_SAR = '/home/datawork-cersat-public/project/cci-seastate/sandbox/
-# data/sar/v3.0/'
-# path_SAR = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/
-# analysis/s1_data_analysis/hs_nn/cci_orbit_files/v3.2"
+
 path_SAR = "/home/datawork-cersat-public/cache/project/mpc-sentinel1/data/esa/"
-# path = '/home/ref-cmems-public/tac/wave/WAVE_GLO_WAV_L3_SWH_NRT_
-# OBSERVATIONS_014_001/dataset-wav-alti-l3-swh-rt-global-j3/'
-# path_alt = '/home/ref-cmems-public/tac/wave/WAVE_GLO_WAV_L3_SWH_NRT_
-# OBSERVATIONS_014_001/dataset-wav-alti-l3-swh-rt-global-%s'
 subset_alti_name_dir = "cmems_obs-wave_glo_phy-swh_nrt_%s-l3_PT1S"
 cmems_dir = "/home/ref-cmems-public/tac/wave/WAVE_GLO_PHY_SWH_L3_NRT_014_001/"
 PATH_ALT = {
@@ -1033,6 +1020,7 @@ def treat_one_safe_wv(
 
     """
     logging.debug("SAR Sentinel-1 WV SAFE to process : %s ", safewv)
+    ds_alti = None
     dict4colocs = {}
     dict4colocs["times_SAR"] = []  # list of SAR Datetime
     dict4colocs["liste_count"] = []  # list of wave

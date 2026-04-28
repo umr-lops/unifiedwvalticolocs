@@ -1,0 +1,9 @@
+DIR_OUT_ROOT: "/home/datawork-cersat-public/cache/project/mpc-sentinel1"
+path_SAR: "/home/datawork-cersat-public/cache/project/mpc-sentinel1/data/esa/"
+DIR_OUT_SUBDIRS: "analysis/s1_data_analysis/hs_nn/unified_colocs_wv_alti"
+subset_alti_name_dir: "cmems_obs-wave_glo_phy-swh_nrt_%s-l3_PT1S"
+cmems_dir: "/home/ref-cmems-public/tac/wave/WAVE_GLO_PHY_SWH_L3_NRT_014_001/"
+cci_alti_dir: "/home/ref-cersat-public/ocean-waves/cci-seastate/v4/"
+delta_t_sat: 3
+delta_t_sat_short: 10800
+DELTA_DIST: 2
