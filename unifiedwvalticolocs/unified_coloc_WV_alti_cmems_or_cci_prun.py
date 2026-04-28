@@ -7,8 +7,8 @@ import subprocess
 import numpy as np
 
 from unifiedwvalticolocs.create_listing_jobarray import (
+    argument_parser,
     create_listing_jobarray,
-    parse_arguments,
 )
 
 prunexe = "/appli/prun/bin/prun"
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     if root.handlers:
         for handler in root.handlers:
             root.removeHandler(handler)
-    args = parse_arguments()
+    args = argument_parser()
     if args.verbose:
         logging.basicConfig(
             level=logging.DEBUG, format="%(asctime)s %(levelname)-5s %(message)s"
