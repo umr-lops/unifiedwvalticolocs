@@ -50,5 +50,4 @@ RUN if [ "$INSTALL_DEV" = "true" ] ; then poetry install ; else poetry install -
 RUN which procunifiedwvalticolocs
 
 # 10. The command to run your app
-# Replace 'your_script.py' with your actual entry point
 CMD ["python", "-m", "unifiedwvalticolocs"]

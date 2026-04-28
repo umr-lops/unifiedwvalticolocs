@@ -1,0 +1,104 @@
+# Apptainer definition file for unifiedwvalticolocs
+# Build (no private registry token needed at runtime):
+#   apptainer build --build-arg CI_JOB_TOKEN=<your_token> unifiedwvalticolocs.sif unifiedwvalticolocs.def
+# Run:
+#   apptainer run unifiedwvalticolocs.sif
+# Shell:
+#   apptainer shell unifiedwvalticolocs.sif
+
+Bootstrap: docker
+From: python:3.12-slim-bookworm
+
+%arguments
+    CI_JOB_TOKEN=
+    INSTALL_DEV=false
+
+%environment
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
+    export PYTHONDONTWRITEBYTECODE=1
+    export PYTHONUNBUFFERED=1
+    export PATH=/workspace/.local/bin:$PATH
+
+%setup
+    # Runs on the HOST before the container is built.
+    # Nothing needed here.
+
+%files
+    # Copy project files into the container at build time.
+    # Paths are relative to the build context (directory where you run apptainer build).
+    pyproject.toml         /workspace/pyproject.toml
+    poetry.lock            /workspace/poetry.lock
+    unifiedwvalticolocs/   /workspace/unifiedwvalticolocs/
+    tests/                 /workspace/tests/
+    README.md              /workspace/README.md
+    LICENSE                /workspace/LICENSE
+
+%post
+    set -e
+
+    # ---- system deps ----
+    apt-get update
+    apt-get install -y --no-install-recommends curl
+    rm -rf /var/lib/apt/lists/*
+
+    # ---- Poetry ----
+    pip install --no-cache-dir poetry
+    poetry config virtualenvs.create false
+
+    # ---- private Ifremer registry ----
+    # CI_JOB_TOKEN is passed via --build-arg; skip if empty (local dev builds)
+    if [ -n "{{ CI_JOB_TOKEN }}" ]; then
+        poetry config repositories.ifremer \
+            https://gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple
+        poetry config http-basic.ifremer gitlab-ci-token "{{ CI_JOB_TOKEN }}"
+    fi
+
+    # ---- install dependencies + project ----
+    cd /workspace
+
+    if [ "{{ INSTALL_DEV }}" = "true" ]; then
+        poetry install
+    else
+        poetry install --without dev
+    fi
+
+    # ---- sanity check ----
+    which procunifiedwvalticolocs
+
+%runscript
+    # Default command: same as CMD in the Dockerfile
+    exec python -m unifiedwvalticolocs "$@"
+
+%test
+    # Quick smoke test run after build (optional, remove if slow)
+    python -c "import unifiedwvalticolocs; print('import OK')"
+    which procunifiedwvalticolocs
+
+%labels
+    Maintainer   antoine.grouazel@ifremer.fr
+    Version      2026.2.17
+    Description  Colocation of S1 WV with CMEMS/CCI altimeter sea-state data
+
+%help
+    Apptainer image for the unifiedwvalticolocs Python library.
+
+    Build (production):
+        apptainer build \
+            --build-arg CI_JOB_TOKEN=<token> \
+            unifiedwvalticolocs.sif unifiedwvalticolocs.def
+
+    Build (dev, includes test dependencies):
+        apptainer build \
+            --build-arg CI_JOB_TOKEN=<token> \
+            --build-arg INSTALL_DEV=true \
+            unifiedwvalticolocs_dev.sif unifiedwvalticolocs.def
+
+    Run default entrypoint:
+        apptainer run unifiedwvalticolocs.sif [args...]
+
+    Run entry-point script directly:
+        apptainer exec unifiedwvalticolocs.sif procunifiedwvalticolocs [args...]
+
+    Interactive shell:
+        apptainer shell unifiedwvalticolocs.sif
