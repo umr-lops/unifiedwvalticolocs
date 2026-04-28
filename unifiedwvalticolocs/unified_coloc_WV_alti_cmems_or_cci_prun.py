@@ -1,6 +1,7 @@
 #!/scale/project/lops-siam-airflow/envs_exploit/micromamba/py27/bin/python2.7
 
 import datetime
+import getpass
 import logging
 import os
 import subprocess
@@ -99,13 +100,15 @@ if __name__ == "__main__":
     logging.info("image chosen: %s", args.image)
 
     prunexe = "/appli/prun/bin/prun"
-
+    username = getpass.getuser()
     if args.listing:
         listing = args.listing
         cpt = len(open(listing).readlines())
     else:
-        listing = (
-            "/home1/scratch/satwave/listing_coloc_CMEMS_CCI_Alti_WV_S1_CCI_prun.txt"
+        listing = os.path.join(
+            "/home1/scratch/",
+            username,
+            "listing_coloc_CMEMS_CCI_Alti_WV_S1_CCI_prun.txt",
         )
 
         if args.start:

@@ -24,15 +24,9 @@ From: python:3.12-slim-bookworm
     # Runs on the HOST before the container is built.
     # Nothing needed here.
 
+
 %files
-    # Copy project files into the container at build time.
-    # Paths are relative to the build context (directory where you run apptainer build).
-    pyproject.toml         /workspace/pyproject.toml
-    poetry.lock            /workspace/poetry.lock
-    unifiedwvalticolocs/   /workspace/unifiedwvalticolocs/
-    tests/                 /workspace/tests/
-    README.md              /workspace/README.md
-    LICENSE                /workspace/LICENSE
+    .                      /workspace
 
 %post
     set -e
