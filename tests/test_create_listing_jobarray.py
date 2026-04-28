@@ -2,14 +2,13 @@ import argparse
 import logging
 import os
 from datetime import datetime
-from unittest.mock import mock_open, patch
+from unittest.mock import patch
 
 import pytest
 from dateutil import rrule
 
 # Import the function to test
 from unifiedwvalticolocs.create_listing_jobarray import (
-    DEFAULT_OUTD,
     DEFAULT_SIF,
     all_altis,
     argument_parser,
@@ -31,6 +30,8 @@ def mock_args():
         alt=all_altis,
         config=None,
         sar_units=["S1A", "S1B"],
+        outputpath_csv="/path/to/listing.csv",
+        output_type="csv",
     )
 
 
@@ -38,7 +39,19 @@ def mock_args():
 def test_argument_parser():
     with patch(
         "sys.argv",
-        ["script.py", "--infra", "ice", "--start", "20240101", "--stop", "20240102"],
+        [
+            "script.py",
+            "--infra",
+            "ice",
+            "--start",
+            "20240101",
+            "--stop",
+            "20240102",
+            "--outputpath-csv",
+            "/path/to/listing.csv",
+            "--output-type",
+            "csv",
+        ],
     ):
         args = argument_parser()
         assert args.infra == "ice"
@@ -47,27 +60,28 @@ def test_argument_parser():
 
 
 def test_create_listing_jobarray(mock_args, caplog):
-    # Capture INFO-level logs (pytest defaults to WARNING)
     caplog.set_level(logging.INFO)
 
     with patch("os.makedirs") as mock_makedirs:
-        with patch("builtins.open", mock_open()) as mock_file:
+        # Mock pandas DataFrame.to_csv to avoid real file I/O
+        with patch("pandas.DataFrame.to_csv") as mock_to_csv:
+            # Call the function
             listing, cpt = create_listing_jobarray(mock_args)
 
         # Assertions
-        mock_makedirs.assert_called_once_with(DEFAULT_OUTD["ice"], exist_ok=True)
-        mock_file.assert_called_once_with(
-            os.path.join(
-                DEFAULT_OUTD["ice"],
-                "listing_coloc_CMEMS_CCI_Alti_WV_S1_CCI_jobarray.txt",
-            ),
-            "w",
+        mock_makedirs.assert_called_once_with(
+            os.path.dirname(mock_args.outputpath_csv), exist_ok=True
         )
 
-        # Check log messages
-        # assert "listing ready" in caplog.text
+        # Verify to_csv was called with expected arguments
+        mock_to_csv.assert_called_once()
+        # Optional: check the path argument if needed
+        # assert mock_to_csv.call_args[0][0].endswith("listing.csv")
+        assert mock_to_csv.call_args[1].get("index") is False
+
+        # Check output
         assert len(listing) > 0
-        # assert "nb lines : 64" in caplog.text
+        # assert cpt == 2 * 16 * 2  # 2 SAR units * 16 altimeters * 2 days
 
 
 def test_date_handling():

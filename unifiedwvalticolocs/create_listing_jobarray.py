@@ -6,6 +6,7 @@ import getpass
 import logging
 import os
 
+import pandas as pd
 from dateutil import rrule
 
 username = getpass.getuser()
@@ -70,6 +71,11 @@ def argument_parser():
         help="path where to store output coloc (.nc) [optional, set based on infrastructure] ",
     )
     parser.add_argument(
+        "--outputpath-csv",
+        required=True,
+        help="path where the listing for job array will be created. ",
+    )
+    parser.add_argument(
         "--image",
         required=False,
         default=DEFAULT_SIF,
@@ -93,6 +99,12 @@ def argument_parser():
         nargs="+",
         default=["S1A", "S1B", "S1C", "S1D"],
         help="List of SAR units to process (e.g., --sar-units S1A S1B) [default is all S1 units]",
+    )
+    parser.add_argument(
+        "--output-type",
+        required=True,
+        choices=["csv", "txt"],
+        help="Output format for the listing file: 'csv' or 'txt' [required]",
     )
     args = parser.parse_args()
     return args
@@ -149,12 +161,14 @@ def create_listing_jobarray(args):
     logging.info("default output dir: %s", outputdir)
     logging.info("default config: %s", config_path)
     logging.info("SAR units chosen: %s", args.sar_units)
+    logging.info("output listing format: %s", args.output_type)
 
-    os.makedirs(default_outputdir, exist_ok=True)
-    listing = os.path.join(
-        default_outputdir,
-        "listing_coloc_CMEMS_CCI_Alti_WV_S1_CCI_jobarray.txt",
-    )
+    # listing = os.path.join(
+    #     default_outputdir,
+    #     "listing_coloc_CMEMS_CCI_Alti_WV_S1_CCI_jobarray.%s" % args.output_type,
+    # )
+    listing = args.outputpath_csv
+    os.makedirs(os.path.dirname(listing), exist_ok=True)
 
     if args.start:
         sta = datetime.datetime.strptime(args.start, "%Y%m%d")
@@ -166,29 +180,52 @@ def create_listing_jobarray(args):
     else:
         sto = datetime.datetime.today()
 
-    fid = open(listing, "w")
+    if args.output_type == "txt":
+        fid = open(listing, "w")
     cpt = 0
-
+    lines_4_csv = []
     for sarunit in args.sar_units:
         for satalti in alti_chosen:
             for dd in rrule.rrule(rrule.DAILY, dtstart=sta, until=sto):
-                cmd_line = (
-                    "--startdate %s --sat %s --alt %s --outputdir %s --image %s --config %s"
-                    % (
-                        dd.strftime("%Y%m%d"),
-                        sarunit,
-                        satalti,
-                        outputdir,
-                        args.image,
-                        config_path,
+                if args.output_type == "csv":
+                    lines_4_csv.append(
+                        (
+                            dd.strftime("%Y%m%d"),
+                            sarunit,
+                            satalti,
+                            outputdir,
+                            args.image,
+                            config_path,
+                        )
                     )
-                )
-                if args.overwrite:
-                    cmd_line += " --redo"
+                elif args.output_type == "txt":
+                    cmd_line = (
+                        "--startdate %s --sat %s --alt %s --outputdir %s --image %s --config %s"
+                        % (
+                            dd.strftime("%Y%m%d"),
+                            sarunit,
+                            satalti,
+                            outputdir,
+                            args.image,
+                            config_path,
+                        )
+                    )
+                    if args.overwrite:
+                        cmd_line += " --redo"
+                    fid.write(cmd_line + "\n")
+                else:
+                    raise ValueError("Invalid output type. Use 'csv' or 'txt'.")
 
-                fid.write(cmd_line + "\n")
                 cpt += 1
-    fid.close()
+    if args.output_type == "txt":
+        fid.close()
+    if args.output_type == "csv":
+
+        df = pd.DataFrame(
+            lines_4_csv,
+            columns=["startdate", "sat", "alt", "outputdir", "image", "config"],
+        )
+        df.to_csv(listing, index=False)
 
     logging.info("listing ready : %s nb lines : %s", listing, cpt)
     return listing, cpt
