@@ -10,7 +10,7 @@ jobs:
         python-version: ["3.11"] # Changed to 3.11 to match your Dockerfile/Project
 
     steps:
-      - uses: actions/checkout@v6 # v4 is the current stable version
+      - uses: actions/checkout@v7 # v4 is the current stable version
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6 # v5 is the current stable version
