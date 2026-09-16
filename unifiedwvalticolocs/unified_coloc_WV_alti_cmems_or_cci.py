@@ -29,6 +29,8 @@ from tqdm import tqdm
 
 from unifiedwvalticolocs.utils import get_conf_content
 
+logger = logging.getLogger(__name__)
+
 rng = np.random.default_rng(42)
 warnings.filterwarnings(
     "ignore",
@@ -109,14 +111,14 @@ def step_0_get_sar_dt(sards):
     """
     t0 = time.time()
     list_date_sar_dt = []
-    logging.debug("step 0: get SAR dates")
+    logger.debug("step 0: get SAR dates")
     for xtimewv in range(len(sards["time_sar"])):  # loop to run alltime
         # log in the file
         date_sar = sards["time_sar"].values[xtimewv]
         dt = from_npdt64_to_dt(date_sar)
         list_date_sar_dt.append(dt)
     elapsed = time.time() - t0
-    logging.debug("step0 done in %1.2f sec", elapsed)
+    logger.debug("step0 done in %1.2f sec", elapsed)
     return list_date_sar_dt
 
 
@@ -145,19 +147,19 @@ def step_1_temp_match_cci(date_sar_dt, delta_t_sat, path_altimeters, acro_alti):
             "data",
             "satellite",
             "altimeter",
-            "l2p",
+            "l2p-swh",
             POSSIBLES_CCI_ALTI[acro_alti][0],
             dd.strftime("%Y"),
             dd.strftime("%j"),
             "ESACCI-SEASTATE-L2P-SWH-%s-%sT*-fv01.nc"
             % (POSSIBLES_CCI_ALTI[acro_alti][1], dd.strftime("%Y%m%d")),
         )
-        logging.debug("pattern alti : %s", path_glob)
+        logger.debug("pattern alti : %s", path_glob)
         final_list_alti += sorted(
             glob.glob(path_glob)
         )  # gather all ALT file within sta and sto range
-    logging.debug("nb CCI files alti to read: %s", len(final_list_alti))
-    logging.debug("output listing of alti: %s", final_list_alti)
+    logger.debug("nb CCI files alti to read: %s", len(final_list_alti))
+    logger.debug("output listing of alti: %s", final_list_alti)
     return final_list_alti
 
 
@@ -273,7 +275,7 @@ def step_1_temp_match_cmems(date_sar_dt, delta_t_sat, path_altimeters, acro_alti
     # If sta and sto are naive, make them aware (assuming UTC)
     sta = sta.replace(tzinfo=timezone.utc)
     sto = sto.replace(tzinfo=timezone.utc)
-    # logging.debug('path_altimeters : %s',path_altimeters)
+    # logger.debug('path_altimeters : %s',path_altimeters)
     for dd in rrule.rrule(rrule.DAILY, dtstart=sta, until=sto):
         path_glob = os.path.join(
             path_altimeters,
@@ -293,7 +295,7 @@ def step_1_temp_match_cmems(date_sar_dt, delta_t_sat, path_altimeters, acro_alti
             sta=sta,
             sto=sto,
         )
-    logging.debug(
+    logger.debug(
         "lst_nc_files_alti_timematchup : %s", len(lst_nc_files_alti_timematchup)
     )
     # browse all the files and pick up the latest generated files
@@ -308,7 +310,7 @@ def step_1_temp_match_cmems(date_sar_dt, delta_t_sat, path_altimeters, acro_alti
         )
         if max_group == generation_date_alt_sto:
             final_list_alti.append(uu)
-    logging.debug("output listing of alti: %s", final_list_alti)
+    logger.debug("output listing of alti: %s", final_list_alti)
     return final_list_alti
 
 
@@ -372,14 +374,14 @@ def read_all_alti_files(liste_altimeter_files, altidatabase):
     tmp_lons[mask_bad_lon] -= 360.0
     super_bad = tmp_lons > 360
     tmp_lons[super_bad] = np.nan
-    logging.debug("tmp_lons : %s %s", np.nanmax(tmp_lons), np.nanmin(tmp_lons))
+    logger.debug("tmp_lons : %s %s", np.nanmax(tmp_lons), np.nanmin(tmp_lons))
     ds_alti[lon_varname] = xr.DataArray(
         tmp_lons, dims=["time"], coords={"time": ds_alti["time"].values}
     )
     subset_alti1 = ds_alti.where(np.isfinite(ds_alti[lon_varname]), drop=True)
     points_alt = np.c_[ds_alti[lat_varname], ds_alti[lon_varname]]
     tree_alti = KDTree(points_alt)
-    logging.debug("alti files loaded, number of points: %s", len(subset_alti1["time"]))
+    logger.debug("alti files loaded, number of points: %s", len(subset_alti1["time"]))
     return subset_alti1, tree_alti
 
 
@@ -427,9 +429,9 @@ def get_distances_v2(sar_dataset, subset_ok_match_alti, lon_varname, lat_varname
     latsar = sar_dataset["oswLat"].values
     lonssartiled = np.tile(lonsar, (len(lons_alt)))
     latssartiled = np.tile(latsar, (len(lons_alt)))
-    logging.debug("lons_alt %s,lonssartiled %s ", lons_alt.shape, lonssartiled.shape)
+    logger.debug("lons_alt %s,lonssartiled %s ", lons_alt.shape, lonssartiled.shape)
     all_dists = haversine(lonssartiled, latssartiled, lons_alt, lats_alt)
-    logging.debug("time  to get distances v2 : %1.2f sec", (time.time() - t0))
+    logger.debug("time  to get distances v2 : %1.2f sec", (time.time() - t0))
     return all_dists
 
 
@@ -571,7 +573,7 @@ def save_coloc_netcdf_file(ds_colocations, output_nc_file):
     new_file_written = False
     if not os.path.exists(output_nc_file):
         if len(ds_colocations["oswLon"]) > 0:
-            logging.info("start writting netCDF")
+            logger.info("start writting netCDF")
             ds = xr.Dataset()
             ds["lat_SAR"] = ds_colocations["oswLat"].assign_attrs(
                 {
@@ -742,11 +744,11 @@ def save_coloc_netcdf_file(ds_colocations, output_nc_file):
                 " and altimeter coming from CCi sea state or CMEMS database",
             }
 
-            logging.info(output_nc_file)
+            logger.info(output_nc_file)
             ds.to_netcdf(output_nc_file)
             new_file_written = True
         else:
-            logging.info("no file to save")
+            logger.info("no file to save")
     return new_file_written
 
 
@@ -760,7 +762,7 @@ def save_coloc_netcdf_file(ds_colocations, output_nc_file):
 #     all_oswtotalhs = []
 #     all_oswtotalhsstdev = []
 #     for tt in sar_wv_ds["time"].values:
-#         logging.debug("tt : %s", tt)
+#         logger.debug("tt : %s", tt)
 #         dt = from_npdt64_to_dt(tt)
 #         fp_ocn = get_full_path_ocn_wv_from_approximate_date(dt, sar_unit, level="L2")
 #         toths = np.nan
@@ -820,7 +822,7 @@ def write_coloc_listing(outputlisting, coloc_listing_data, redo=False):
     :return:
     """
     if os.path.exists(outputlisting) and redo is False:
-        logging.info("%s already exists", outputlisting)
+        logger.info("%s already exists", outputlisting)
     else:
         fid = open(outputlisting, "w")
         for sarfullpath in coloc_listing_data.keys():
@@ -833,7 +835,7 @@ def write_coloc_listing(outputlisting, coloc_listing_data, redo=False):
                     sarfp + "," + coloc_listing_data[sarfullpath][altifile_idx] + "\n"
                 )
         fid.close()
-        logging.info("output listing coloc : %s", outputlisting)
+        logger.info("output listing coloc : %s", outputlisting)
 
 
 def preprocess_wv_s1_ocn(ds):
@@ -866,7 +868,7 @@ def preprocess_wv_s1_ocn(ds):
         if vv in ds.variables:
             consolidated_lst_var_tokeep.append(vv)
         else:
-            logging.debug("variable %s is not present in S1 WV OCN file", vv)
+            logger.debug("variable %s is not present in S1 WV OCN file", vv)
 
     ds = ds[consolidated_lst_var_tokeep]
     ds["time_sar"] = xr.DataArray(
@@ -1021,7 +1023,7 @@ def treat_one_safe_wv(
 
 
     """
-    logging.debug("SAR Sentinel-1 WV SAFE to process : %s ", safewv)
+    logger.debug("SAR Sentinel-1 WV SAFE to process : %s ", safewv)
     ds_alti = None
     colocated_observations = xr.Dataset({"empty": (["time_sar"], [])})
     dict4colocs = {}
@@ -1037,14 +1039,14 @@ def treat_one_safe_wv(
     dict4colocs["liste_DELTA_D_closer"] = []
     sarunit = os.path.basename(safewv)[0:3]
     measurement_wv_list = glob.glob(os.path.join(safewv, "measurement", "*.nc"))
-    logging.debug("Number of measurement in the SAFE : %d", len(measurement_wv_list))
+    logger.debug("Number of measurement in the SAFE : %d", len(measurement_wv_list))
     tmpsarmeasu = []
     for iiwv in tqdm(range(len(measurement_wv_list)), disable=True):
         tmpsarmeasu.append(
             preprocess_wv_s1_ocn(xr.open_dataset(measurement_wv_list[iiwv]))
         )
     sar_dataset_safe = xr.concat(tmpsarmeasu, dim="time_sar").load()
-    logging.debug("all SAR files loaded")
+    logger.debug("all SAR files loaded")
     list_date_sar_dt = step_0_get_sar_dt(sards=sar_dataset_safe)
 
     # get all the altimeter files that are in the raw time window (delta_t_sat_long) around the SAR SAFE
@@ -1091,9 +1093,9 @@ def treat_one_safe_wv(
                 dev
                 and cpt["nb_index_sar_with_matching_alti"] > MAX_NB_MATCHUPS_DEV_MODE
             ):
-                logging.info("break loops over measurements after finding few matchups")
+                logger.info("break loops over measurements after finding few matchups")
                 break
-        logging.debug("end of pair construction")
+        logger.debug("end of pair construction")
         colocated_observations = sar_dataset_safe.sel(time_sar=dict4colocs["times_SAR"])
 
         alti_colocated_ds = xr.Dataset()
@@ -1109,10 +1111,10 @@ def treat_one_safe_wv(
                 dims=["time_sar"],
                 coords={"time_sar": colocated_observations["time_sar"].values},
             )
-        logging.debug("merge alti and SAR colocated values")
+        logger.debug("merge alti and SAR colocated values")
         colocated_observations = xr.merge([colocated_observations, alti_colocated_ds])
     else:
-        logging.info("no altimeter files found in the time window around the SAR SAFE")
+        logger.info("no altimeter files found in the time window around the SAR SAFE")
         cpt["nb_safe_without_alti_files"] += 1
     return colocated_observations, coloc_listing, cpt
 
@@ -1179,7 +1181,7 @@ def core_coloc(
         altidb, alt, conf=conf
     )
 
-    logging.info("path_altimeter : %s", path_altimeter)
+    logger.info("path_altimeter : %s", path_altimeter)
     assert os.path.exists(path_altimeter)
     assert os.path.exists(conf["path_SAR"])
     long_name_sar_unit = "sentinel-1" + sarunit[-1].lower()
@@ -1193,9 +1195,9 @@ def core_coloc(
         JY,
         "*.SAFE",
     )
-    logging.info("SAR ESA CCI Sea state Ifr pattern : %s", pattern_sar)
+    logger.info("SAR ESA CCI Sea state Ifr pattern : %s", pattern_sar)
     lst_wv_safe_sorted = sorted(glob.glob(pattern_sar))
-    logging.info("%s SAR WV SAFE found", len(lst_wv_safe_sorted))
+    logger.info("%s SAR WV SAFE found", len(lst_wv_safe_sorted))
     output_nc_file = os.path.join(
         outputdir,
         sarunit + "_" + alt,
@@ -1215,7 +1217,7 @@ def core_coloc(
     time.sleep(rng.integers(0, 10))
     os.makedirs(os.path.dirname(output_nc_file), 0o0775, exist_ok=True)
     if os.path.exists(output_nc_file) and redo is False:
-        logging.info("output coloc S1-WV alti file already exists (redo is False)")
+        logger.info("output coloc S1-WV alti file already exists (redo is False)")
         sys.exit(0)
 
     coloc_listing = {}
@@ -1229,7 +1231,7 @@ def core_coloc(
                 "WV SAFE : nb colocs %i" % cpt["nb_index_sar_with_matching_alti"]
             )
             safewv = lst_wv_safe_sorted[ssi]
-            logging.debug("%i/%i", ssi + 1, len(lst_wv_safe_sorted))
+            logger.debug("%i/%i", ssi + 1, len(lst_wv_safe_sorted))
             # treat one safe here
             one_safe_colocs, coloc_listing, cpt = treat_one_safe_wv(
                 safewv,
@@ -1250,7 +1252,7 @@ def core_coloc(
                 dev
                 and cpt["nb_index_sar_with_matching_alti"] > MAX_NB_MATCHUPS_DEV_MODE
             ):
-                logging.info("break loops over SAFE after finding few matchups")
+                logger.info("break loops over SAFE after finding few matchups")
                 break
         if len(all_safe_matchups) > 0:
             daily_colocated_observations = xr.concat(all_safe_matchups, dim="time_sar")
@@ -1261,7 +1263,7 @@ def core_coloc(
                 daily_colocated_observations, output_nc_file
             )
             if output_file_written:
-                logging.info("successfull save output file: %s", output_nc_file)
+                logger.info("successfull save output file: %s", output_nc_file)
 
             if len(daily_colocated_observations["oswLon"]) > 0:
                 # write listing coloc
@@ -1283,7 +1285,7 @@ def core_coloc(
                 )
                 write_coloc_listing(output_lst_file, coloc_listing, redo=redo)
     else:
-        logging.info("no SAR WV data for %s", startdate)
+        logger.info("no SAR WV data for %s", startdate)
     return cpt
 
 
@@ -1348,13 +1350,13 @@ def entrypoint():
         )
     else:
         logging.basicConfig(level=logging.INFO, format=fmt, datefmt="%d/%m/%Y %H:%M:%S")
-    logging.info(
+    logger.info(
         "Start of execution for script %s using "
         "WV Level-2 OCN and altimeters from "
         "CCI sea state L2P or CMEMS WAV L3",
         os.path.basename(__file__),
     )
-    logging.info("development/test mode activated: %s", args.dev)
+    logger.info("development/test mode activated: %s", args.dev)
     config = get_conf_content(args.config)
     cpt = core_coloc(
         sarunit=args.sat,
@@ -1366,10 +1368,10 @@ def entrypoint():
         progressbar=args.progressbar,
         conf=config,
     )
-    logging.info("memory in Mo: %s", getrusage(RUSAGE_SELF).ru_maxrss / 1000.0)
-    logging.info("counters: %s", cpt)
-    logging.info("analysis done in %1.1f sec", time.time() - tinit)
-    logging.info("end.")
+    logger.info("memory in Mo: %s", getrusage(RUSAGE_SELF).ru_maxrss / 1000.0)
+    logger.info("counters: %s", cpt)
+    logger.info("analysis done in %1.1f sec", time.time() - tinit)
+    logger.info("end.")
 
 
 if __name__ == "__main__":

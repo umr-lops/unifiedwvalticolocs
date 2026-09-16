@@ -88,14 +88,7 @@ packages = ["unifiedwvalticolocs"]
 [tool.hatch.build.targets.sdist]
 include = ["unifiedwvalticolocs", "tests", "README.md"]
 
-# Private index for s1ifr (local dev with uv)
-[[tool.uv.index]]
-name = "s1ifr"
-url = "https://__token__${S1IFR_PYPI_TOKEN}@gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple"
-explicit = true
 
-[tool.uv.sources]
-s1ifr = { index = "s1ifr" }
 
 [tool.black]
 target-version = ["py311"]
