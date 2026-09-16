@@ -2,8 +2,7 @@
 
 ## Dependencies
 
-We use `poetry` to manage the [dependencies](https://github.com/python-poetry/poetry).
-If you dont have `poetry`, you should install with `make poetry-download`.
+We use standard `pip` with a `pyproject.toml` (built with [Hatchling](https://hatch.pypa.io/latest/build/)) to manage dependencies.
 
 To install dependencies and prepare [`pre-commit`](https://pre-commit.com/) hooks you would need to run `install` command:
 
@@ -12,7 +11,7 @@ make install
 make pre-commit-install
 ```
 
-To activate your `virtualenv` run `poetry shell`.
+`make install` installs the project in editable mode with its dev dependencies (`pip install -e ".[dev]"`) into whatever Python environment is currently active — create and activate a virtual environment first (`python -m venv .venv && source .venv/bin/activate`, or `micromamba create`/`conda create`) if you haven't already.
 
 ## Codestyle
 
