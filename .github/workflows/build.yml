@@ -19,10 +19,8 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        env:
-          CI_JOB_TOKEN: ${{ secrets.CI_JOB_TOKEN }}
+
         run: |
-          export PIP_EXTRA_INDEX_URL="https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple"
           pip install -e ".[dev]"
 
       - name: Run style checks
