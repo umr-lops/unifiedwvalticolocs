@@ -1,5 +1,5 @@
 # Apptainer definition file for unifiedwvalticolocs
-# Build (no private registry token needed — s1ifr is now on PyPI):
+# Build :
 #   apptainer build unifiedwvalticolocs.sif unifiedwvalticolocs.def
 # Run:
 #   apptainer run unifiedwvalticolocs.sif

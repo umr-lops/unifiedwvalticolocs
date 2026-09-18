@@ -161,7 +161,6 @@ For development (editable install with dev tools):
 pip install -e ".[dev]"
 ```
 
-The package pulls `s1ifr` from Ifremer's private GitLab package index — see the `[[tool.uv.index]]` entry in `pyproject.toml` if you're using `uv`, or configure `PIP_EXTRA_INDEX_URL` for plain `pip`.
 
 ### Makefile usage
 
