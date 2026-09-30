@@ -10,16 +10,26 @@ jobs:
         python-version: ["3.11"]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
       - name: Install dependencies
 
+      - name: Set up cache
+        uses: actions/cache@v5 # v4 is the current stable version
+        with:
+          path: .venv
+          key: venv-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        env:
+          # 1. INJECT THE SECRET HERE
+          CI_JOB_TOKEN: ${{ secrets.CI_JOB_TOKEN }}
         run: |
           pip install -e ".[dev]"
 
