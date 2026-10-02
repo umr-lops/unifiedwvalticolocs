@@ -7,32 +7,22 @@ PYTHONPATH := `pwd`
 IMAGE := unifiedwvalticolocs
 VERSION := latest
 
-#* Poetry
-.PHONY: poetry-download
-poetry-download:
-	$(PYTHON) -m pip install poetry
-
-.PHONY: poetry-remove
-poetry-remove:
-	$(PYTHON) -m pip uninstall -y poetry
-
 #* Installation
 .PHONY: install
 install:
-	poetry lock -n && poetry export --without-hashes > requirements.txt
-	poetry install -n
-	-poetry run mypy --install-types --non-interactive ./
+	$(PYTHON) -m pip install -e ".[dev]"
+	-mypy --install-types --non-interactive ./
 
 .PHONY: pre-commit-install
 pre-commit-install:
-	poetry run pre-commit install
+	pre-commit install
 
 #* Formatters
 .PHONY: codestyle
 codestyle:
-	poetry run pyupgrade --exit-zero-even-if-changed --py39-plus **/*.py
-	poetry run isort --settings-path pyproject.toml ./
-	poetry run black --config pyproject.toml ./
+	pyupgrade --exit-zero-even-if-changed --py311-plus **/*.py
+	isort --settings-path pyproject.toml ./
+	black --config pyproject.toml ./
 
 .PHONY: formatting
 formatting: codestyle
@@ -40,39 +30,35 @@ formatting: codestyle
 #* Linting
 .PHONY: test
 test:
-	PYTHONPATH=$(PYTHONPATH) poetry run pytest -c pyproject.toml --cov-report=html --cov=unifiedwvalticolocs tests/
-	poetry run coverage-badge -o assets/images/coverage.svg -f
+	PYTHONPATH=$(PYTHONPATH) pytest -c pyproject.toml --cov-report=html --cov=unifiedwvalticolocs tests/
+	coverage-badge -o assets/images/coverage.svg -f
 
 .PHONY: check-codestyle
 check-codestyle:
-	poetry run isort --diff --check-only --settings-path pyproject.toml ./
-	poetry run black --diff --check --config pyproject.toml ./
-	poetry run flake8 --config setup.cfg unifiedwvalticolocs/ tests/
-	poetry run darglint --verbosity 2 unifiedwvalticolocs tests
+	isort --diff --check-only --settings-path pyproject.toml ./
+	black --diff --check --config pyproject.toml ./
+	flake8 --config setup.cfg unifiedwvalticolocs/ tests/
+	darglint --verbosity 2 unifiedwvalticolocs tests
 
 .PHONY: mypy
 mypy:
-	poetry run mypy --config-file pyproject.toml ./
+	mypy --config-file pyproject.toml ./
 
 .PHONY: check-safety
 check-safety:
-	poetry check
-	poetry run bandit -ll --recursive unifiedwvalticolocs tests
+	bandit -ll --recursive unifiedwvalticolocs tests
 
 .PHONY: check-safety-full
 check-safety-full:
-	poetry check
-	poetry run safety scan --full-report
-	poetry run bandit -ll --recursive unifiedwvalticolocs tests
-
+	safety scan --full-report
+	bandit -ll --recursive unifiedwvalticolocs tests
 
 .PHONY: lint
 lint: test check-codestyle mypy check-safety
 
 .PHONY: update-dev-deps
 update-dev-deps:
-	poetry add -D bandit@latest darglint@latest "isort[colors]@latest" mypy@latest pre-commit@latest pydocstyle@latest pylint@latest pytest@latest pyupgrade@latest safety@latest coverage@latest coverage-badge@latest pytest-html@latest pytest-cov@latest
-	poetry add -D --allow-prereleases black@latest
+	$(PYTHON) -m pip install -U bandit darglint "isort[colors]" mypy pre-commit pydocstyle pylint pytest pyupgrade safety coverage coverage-badge pytest-html pytest-cov black
 
 #* Docker
 # Example: make docker-build VERSION=latest
