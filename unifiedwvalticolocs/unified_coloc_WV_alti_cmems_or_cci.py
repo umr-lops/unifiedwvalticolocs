@@ -23,6 +23,7 @@ from dateutil import rrule
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
+import unifiedwvalticolocs
 from unifiedwvalticolocs.utils import get_conf_content
 
 EARTH_RADIUS_KM = 6371.0088
@@ -323,7 +324,8 @@ def preproc_cmems_alti_files(ds: xr.Dataset) -> xr.Dataset:
     tmpfname = np.empty(ds["time"].shape, dtype="O")
     tmpfname[:] = os.path.basename(filee)
     ds["fname"] = xr.DataArray(tmpfname, dims=["time"])
-    return ds
+    pct_good = 100.0  # already edited product
+    return ds, pct_good
 
 
 def preproc_cciseastate_alti_files(ds: xr.Dataset) -> tuple[xr.Dataset, float]:
@@ -345,6 +347,7 @@ def preproc_cciseastate_alti_files(ds: xr.Dataset) -> tuple[xr.Dataset, float]:
     mask_good = ds["swh_quality_level"] == 3
     pct_good = 100.0 * mask_good.sum() / mask_good.size
     ds = ds.where(mask_good, drop=True)
+    assert "fname" in ds
     return ds, pct_good
 
 
@@ -554,7 +557,7 @@ def step_3_closer_temp_match(
     ind_closest_in_time = np.argmin(diffs_times_seconds)
     inds_ok_alti = np.flatnonzero(mask_time_ok)
     cpt["maximum_colocs_time_and_space"] += mask_time_ok.sum()
-
+    subset_ok_match_alti_all_time_and_space = subset_alti.isel(time=inds_ok_alti)
     subset_ok_match_alti = None
     list_alti_files_timespace_match = []
     if len(inds_ok_alti) > 0:
@@ -562,6 +565,8 @@ def step_3_closer_temp_match(
         delta_d_closest_in_time = get_distances_v2(
             sar_dataset, subset_ok_match_alti, lon_varname, lat_varname
         )
+        if isinstance(sar_dt64, list) or isinstance(sar_dt64, np.ndarray):
+            sar_dt64 = sar_dt64[0]
         delta_t_closest_in_time = (subset_ok_match_alti["time"] - sar_dt64).astype(
             "timedelta64[s]"
         )
@@ -583,8 +588,18 @@ def step_3_closer_temp_match(
                 lat_varname: "lat_ALT",
             }
         )
-        list_alti_files_timespace_match = np.unique(subset_alti["fname"])
-    return subset_ok_match_alti, list_alti_files_timespace_match, cpt
+        subset_ok_match_alti["hs_alti_closest"].attrs[
+            "original_variable_name"
+        ] = swh_varname
+        subset_ok_match_alti["lon_ALT"].attrs["original_variable_name"] = lon_varname
+        subset_ok_match_alti["lat_ALT"].attrs["original_variable_name"] = lat_varname
+        list_alti_files_timespace_match = np.unique(subset_ok_match_alti["fname"])
+    return (
+        subset_ok_match_alti,
+        list_alti_files_timespace_match,
+        cpt,
+        subset_ok_match_alti_all_time_and_space,
+    )
 
 
 def haversine(
@@ -635,6 +650,8 @@ def save_coloc_netcdf_file(ds_colocations: xr.Dataset, output_nc_file: str) -> b
                 "colocation_publisher_email": "lops-siam@listes.ifremer.fr",
                 "colocation_product_description": "colocations between Sentinel-1 WV"
                 " and altimeter coming from CCI sea state or CMEMS database",
+                "colocation_library_version": unifiedwvalticolocs.__version__,
+                "colocation_library_url": "https://github.com/umr-lops/unifiedwvalticolocs",
             }
             for kk, vv in new_attrs.items():
                 ds_colocations.attrs[kk] = vv
@@ -719,10 +736,15 @@ def preprocess_wv_s1_ocn(ds: xr.Dataset) -> xr.Dataset:
         ],
         dims=["time_sar"],
     )
+    # src = os.path.basename(ds.encoding["source"])
+    src = ds.encoding["source"]
+    ds["source_file"] = xr.DataArray([src], dims=["time_sar"])
     ds = ds.squeeze(["oswRaSize", "oswAzSize"])
+
     for var in ds.data_vars:
         if ds[var].dims == ():
             ds[var] = ds[var].expand_dims(time_sar=ds.time_sar)
+
     return ds
 
 
@@ -753,7 +775,8 @@ def treat_one_measurement_wv(
     """
     subset_ok_match_alti = None
     cpt["nb_index_sar_browsed"] += 1
-    fullpath_l2_wv_ocn = sards.encoding["source"]
+    # fullpath_l2_wv_ocn = sards.encoding["source"]
+    fullpath_l2_wv_ocn = str(sards["source_file"].values)
     subset_alti = step_2_geographic_match(
         sards=sards,
         ds_alti=ds_alti,
@@ -762,14 +785,17 @@ def treat_one_measurement_wv(
     )
     if subset_alti is not None:
         cpt["coloc_in_space"] += len(subset_alti["time"])
-        subset_ok_match_alti, list_alti_files_timespace_mu, cpt = (
-            step_3_closer_temp_match(
-                sar_dataset=sards,
-                subset_alti=subset_alti,
-                delta_t_max_minutes=conf["delta_t_minutes"],
-                altidb=altidb,
-                cpt=cpt,
-            )
+        (
+            subset_ok_match_alti,
+            list_alti_files_timespace_mu,
+            cpt,
+            subset_ok_match_alti_all_time_and_space,
+        ) = step_3_closer_temp_match(
+            sar_dataset=sards,
+            subset_alti=subset_alti,
+            delta_t_max_minutes=conf["delta_t_minutes"],
+            altidb=altidb,
+            cpt=cpt,
         )
         if len(list_alti_files_timespace_mu) > 0:
             coloc_listing[fullpath_l2_wv_ocn] = list_alti_files_timespace_mu
@@ -1006,7 +1032,11 @@ def core_coloc(
             altidatabase=altidb,
             conf=conf,
         )
-    if len(lst_wv_safe_sorted):
+    else:
+        ds_alti = None
+        tree_alti = None
+        logger.info("no altimeter files found in the time window around the SAR SAFE")
+    if len(lst_wv_safe_sorted) and ds_alti is not None and len(ds_alti["time"]) > 0:
         all_safe_matchups = []
         pbar = tqdm(range(len(lst_wv_safe_sorted)), desc="WV SAFE")
         for ssi in pbar:
@@ -1060,7 +1090,10 @@ def core_coloc(
                 )
                 write_coloc_listing(output_lst_file, coloc_listing, redo=redo)
     else:
-        logger.info("no SAR WV data for %s", day_analyzed)
+        logger.info(
+            "no SAR WV data for %s or no altimeter data matching this date",
+            day_analyzed,
+        )
     return cpt
 
 
