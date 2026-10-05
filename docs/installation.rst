@@ -36,6 +36,24 @@ From source (development)
 The version is derived from git tags by `hatch-vcs`; an editable install
 from an untagged checkout gets a dev version.
 
+Visualization extra
+-------------------
+
+The colocation illustration helpers (SAFE footprints + WV imagette +
+altimeter track maps) need optional plotting dependencies:
+
+.. code-block:: bash
+
+   pip install -U "unifiedwvalticolocs[viz]"
+
+or from an editable install:
+
+.. code-block:: bash
+
+   pip install -e ".[viz]"
+
+This installs ``cartopy``, ``matplotlib`` and ``shapely``.
+
 HPC / Apptainer
 ---------------
 

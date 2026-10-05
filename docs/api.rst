@@ -12,3 +12,8 @@ API reference
 .. automodule:: unifiedwvalticolocs.utils
    :members:
    :member-order: bysource
+
+.. automodule:: unifiedwvalticolocs.illustrate_wv_alti_coloc_map
+   :members:
+   :member-order: bysource
+   :noindex:
