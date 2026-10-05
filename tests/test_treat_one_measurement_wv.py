@@ -26,7 +26,10 @@ class TestTreatMeasurement:
     @pytest.fixture
     def common_inputs(self, mock_conf):
         ds_sar = xr.Dataset(
-            {"oswTotalHs": (("time_sar",), [2.0])},
+            {
+                "oswTotalHs": (("time_sar",), [2.0]),
+                "source_file": ((), "/path/to/wv_ocn.nc"),
+            },
             coords={"time_sar": [np.datetime64("2022-01-01T12:00:00")]},
         )
         ds_sar.encoding["source"] = "/path/to/wv_ocn.nc"
@@ -65,6 +68,7 @@ class TestTreatMeasurement:
             mock_subset,
             np.array(["alti_file.nc"]),
             common_inputs["cpt"],  # cpt is mutated in-place in the source
+            mock_subset,  # all time+space matches (4th element)
         )
 
         subset_res, listing_res, cpt_res = treat_one_measurement_wv(**common_inputs)
@@ -109,6 +113,7 @@ class TestTreatMeasurement:
             None,
             np.array([]),
             common_inputs["cpt"],
+            None,  # all time+space matches (4th element)
         )
 
         subset_res, listing_res, cpt_res = treat_one_measurement_wv(**common_inputs)
@@ -130,7 +135,7 @@ class TestTreatMeasurement:
     ):
         """conf['delta_dist_km'] and conf['delta_t_minutes'] must be forwarded."""
         mock_step2.return_value = MagicMock()
-        mock_step3.return_value = (None, np.array([]), common_inputs["cpt"])
+        mock_step3.return_value = (None, np.array([]), common_inputs["cpt"], None)
 
         treat_one_measurement_wv(**common_inputs)
 

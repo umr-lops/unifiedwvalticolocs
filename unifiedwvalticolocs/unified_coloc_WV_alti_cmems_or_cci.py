@@ -539,11 +539,9 @@ def step_3_closer_temp_match(
         cpt: Counter.
 
     Returns:
-        Tuple of matching altimeter dataset, list of matching altimeter filenames,
-        and updated counter.
-
-    Raises:
-        ValueError: If altidb is not 'cci' or 'cmems'.
+        Tuple of matching altimeter dataset (closest point), array of matching
+        altimeter filenames, updated counter, and the dataset of all altimeter
+        points within the time and space criteria.
     """
     swh_varname = VAR_NAMES[altidb]["swh_varname"]
     lon_varname = VAR_NAMES[altidb]["lon_varname"]

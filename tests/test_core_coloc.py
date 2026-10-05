@@ -71,8 +71,7 @@ def test_core_coloc_no_sar_data(
     """No SAR SAFE found -> counter remains empty, no output written."""
     mock_get_path.return_value = ("/path/alt", "j3", "VAVH")
     # 1) path_altimeter exists, 2) path_SAR exists, 3) output_nc_file absent
-    # mock_exists.side_effect = [True, True, False]
-    mock_exists.side_effect = [True, True, False, False]
+    mock_exists.side_effect = [True, True, False]
     mock_glob.return_value = []  # no SAR files, and no alti files either
 
     cpt = core_coloc(**mock_params)
@@ -116,7 +115,7 @@ def test_core_coloc_success_flow(
 ):
     """One SAR SAFE + one alti file -> output .nc and .lst are written."""
     mock_get_path.return_value = ("/path/alt", "j3", "VAVH")
-    # path_altimeter, path_SAR exist; output_nc_file does not
+    # path_altimeter, path_SAR exist; output .nc and .lst do not
     mock_exists.side_effect = [True, True, False, False]
 
     mock_glob.return_value = [
@@ -125,8 +124,11 @@ def test_core_coloc_success_flow(
 
     # step_1_temp_match returns a non-empty alti file list
     mock_step1.return_value = ["/path/alt/alti_file.nc"]
-    # read_all_alti_files returns (ds_alti, tree_alti); values unused here
-    mock_read_alti.return_value = (MagicMock(), MagicMock())
+    # read_all_alti_files returns (ds_alti, tree_alti); ds_alti["time"] must be
+    # non-empty for core_coloc to enter the matchup loop.
+    ds_alti_mock = MagicMock()
+    ds_alti_mock.__getitem__.return_value = np.array(["2026-01-12T12:00:00"])
+    mock_read_alti.return_value = (ds_alti_mock, MagicMock())
 
     # treat_one_safe_wv returns (dataset, listing, counter) - 3-tuple now
     new_cpt = defaultdict(int, {"nb_coloc": 1})
@@ -189,7 +191,9 @@ def test_core_coloc_sar_but_no_matchups(
     mock_exists.side_effect = [True, True, False, False]
     mock_glob.return_value = ["/data/foo.SAFE"]
     mock_step1.return_value = ["/path/alt/alti_file.nc"]
-    mock_read_alti.return_value = (MagicMock(), MagicMock())
+    ds_alti_mock = MagicMock()
+    ds_alti_mock.__getitem__.return_value = np.array(["2026-01-12T12:00:00"])
+    mock_read_alti.return_value = (ds_alti_mock, MagicMock())
 
     # treat_one_safe_wv returns an EMPTY dataset (len(time_sar) == 0)
     empty_ds = xr.Dataset(

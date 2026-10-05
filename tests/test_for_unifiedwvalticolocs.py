@@ -190,7 +190,7 @@ class TestSteps:
         """Alti 1 h after SAR is kept when the window is 3 h."""
         cpt = defaultdict(int)
 
-        subset_ok, files_list, cpt_out = step_3_closer_temp_match(
+        subset_ok, files_list, cpt_out, _ = step_3_closer_temp_match(
             sar_dataset=mock_sar_ds,
             subset_alti=mock_alti_ds,
             delta_t_max_minutes=180,  # 3 h
@@ -212,7 +212,7 @@ class TestSteps:
         """Alti 1 h after SAR is rejected when the window is 30 min."""
         cpt = defaultdict(int)
 
-        subset_ok, files_list, _ = step_3_closer_temp_match(
+        subset_ok, files_list, _, _ = step_3_closer_temp_match(
             sar_dataset=mock_sar_ds,
             subset_alti=mock_alti_ds,
             delta_t_max_minutes=30,
@@ -227,7 +227,7 @@ class TestSteps:
         """On success, variables are renamed to generic names."""
         cpt = defaultdict(int)
 
-        subset_ok, _, _ = step_3_closer_temp_match(
+        subset_ok, _, _, _ = step_3_closer_temp_match(
             sar_dataset=mock_sar_ds,
             subset_alti=mock_alti_ds,
             delta_t_max_minutes=180,
@@ -267,7 +267,7 @@ class TestSteps:
         )
 
         cpt = defaultdict(int)
-        subset_ok, _, _ = step_3_closer_temp_match(
+        subset_ok, _, _, _ = step_3_closer_temp_match(
             sar_dataset=ds_sar,
             subset_alti=ds_alti,
             delta_t_max_minutes=60,
