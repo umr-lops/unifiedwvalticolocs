@@ -47,9 +47,11 @@ dependencies = [
 dev = [
   "bandit",
   "black",
+  "cartopy",
   "darglint",
   "flake8",
   "isort[colors]",
+  "matplotlib",
   "mypy",
   "mypy-extensions",
   "pre-commit",
@@ -58,10 +60,16 @@ dev = [
   "pytest",
   "pyupgrade",
   "safety",
+  "shapely",
   "coverage",
   "coverage-badge",
   "pytest-html",
   "pytest-cov",
+]
+viz = [
+  "cartopy",
+  "matplotlib",
+  "shapely",
 ]
 docs = [
   "sphinx",

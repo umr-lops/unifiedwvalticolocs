@@ -528,7 +528,7 @@ def step_3_closer_temp_match(
     delta_t_max_minutes: int,
     altidb: str,
     cpt: defaultdict,
-) -> tuple[xr.Dataset | None, np.ndarray, defaultdict]:
+) -> tuple[xr.Dataset | None, np.ndarray, defaultdict, xr.Dataset]:
     """Find altimeter points within the time window around SAR-WV acquisition.
 
     Args:
