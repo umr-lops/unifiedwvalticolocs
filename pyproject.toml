@@ -63,6 +63,10 @@ dev = [
   "pytest-html",
   "pytest-cov",
 ]
+docs = [
+  "sphinx",
+  "sphinx-rtd-theme",
+]
 
 [project.urls]
 repository = "https://github.com/umr-lops/unifiedwvalticolocs"

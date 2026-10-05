@@ -60,6 +60,11 @@ lint: test check-codestyle mypy check-safety
 update-dev-deps:
 	$(PYTHON) -m pip install -U bandit darglint "isort[colors]" mypy pre-commit pydocstyle pylint pytest pyupgrade safety coverage coverage-badge pytest-html pytest-cov black
 
+#* Documentation
+.PHONY: docs
+docs:
+	sphinx-build -b html docs docs/_build/html
+
 #* Docker
 # Example: make docker-build VERSION=latest
 # Example: make docker-build IMAGE=some_name VERSION=2026.1.27

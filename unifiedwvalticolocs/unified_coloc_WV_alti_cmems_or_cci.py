@@ -1,7 +1,9 @@
-"""
-author: Antoine Grouazel
-Script to create a NetCDF with colocation data's from ALT
- and WV OCN datasets
+"""Create NetCDF colocation datasets from altimeters and S1 WV OCN data.
+
+Author: Antoine Grouazel
+
+Colocates Sentinel-1 WV (wave) OCN Level-2 measurements with CMEMS WAVE L3
+or CCI SeaState L2P altimeter observations, in space and time.
 """
 
 import argparse
