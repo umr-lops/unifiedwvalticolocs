@@ -1,4 +1,5 @@
-#!/scale/project/lops-siam-airflow/envs_exploit/micromamba/py27/bin/python2.7
+#!/usr/bin/env python3
+"""Create the CSV/txt listing consumed by the PBS/SLURM job-array launchers."""
 
 import argparse
 import datetime
@@ -9,7 +10,12 @@ import os
 import pandas as pd
 from dateutil import rrule
 
+from unifiedwvalticolocs.utils import all_altimeters, date_window_for
+
 username = getpass.getuser()
+
+# Every supported altimeter (``cci_<mission>`` / ``cmems_<mission>``).
+all_altis = all_altimeters()
 
 DEFAULT_OUTD = {
     "ice": os.path.join("/home1/scratch/", username, "unified_WV_alti_colocs"),
@@ -20,26 +26,6 @@ DEFAULT_CONFIG = {
     "ice": "/scale/project/lops-siam-airflow/configs_exploit/unifiedwvalticolocs/ice_prod_config.yml",
     "hpc": "/scale/project/lops-siam-airflow/configs_exploit/unifiedwvalticolocs/hpc_prod_config.yml",
 }
-
-all_altis = [
-    "cmems_SARAL",
-    "cmems_cryosat-2",
-    "cmems_CFOSAT",
-    "cmems_Jason-3",
-    "cmems_Sentinel-3A",
-    "cmems_Sentinel-3B",
-    "cmems_HY2B",
-    "cmems_HY2C",
-    "cmems_Sentinel-6A",
-    "cmems_SWOT-Nadir",
-    "cci_cryosat-2",
-    "cci_jason-2",
-    "cci_jason-3",
-    "cci_sentinel-3a",
-    "cci_sentinel-3b",
-    "cci_saral",
-    "cci_sentinel-6",
-]
 
 
 def argument_parser():
@@ -170,15 +156,20 @@ def create_listing_jobarray(args):
     listing = args.outputpath_csv
     os.makedirs(os.path.dirname(listing), exist_ok=True)
 
-    if args.start:
-        sta = datetime.datetime.strptime(args.start, "%Y%m%d")
-    else:
-        sta = datetime.datetime(2014, 4, 1)
-
-    if args.stop:
-        sto = datetime.datetime.strptime(args.stop, "%Y%m%d")
-    else:
-        sto = datetime.datetime.today()
+    explicit_dates = bool(args.start) or bool(args.stop)
+    if explicit_dates:
+        # An explicit --start/--stop overrides the per-pair defaults for all
+        # pairs. Both bounds are inclusive (rrule until= is inclusive).
+        sta_default = (
+            datetime.datetime.strptime(args.start, "%Y%m%d")
+            if args.start
+            else datetime.datetime(2014, 4, 1)
+        )
+        sto_default = (
+            datetime.datetime.strptime(args.stop, "%Y%m%d")
+            if args.stop
+            else datetime.datetime.now()
+        )
 
     if args.output_type == "txt":
         fid = open(listing, "w")
@@ -186,6 +177,22 @@ def create_listing_jobarray(args):
     lines_4_csv = []
     for sarunit in args.sar_units:
         for satalti in alti_chosen:
+            if explicit_dates:
+                sta, sto = sta_default, sto_default
+            else:
+                # Default: the intersection of the SAR and altimeter acquisition
+                # windows for this pair (see utils.date_window_for).
+                window = date_window_for(satalti, sarunit)
+                if window is None:
+                    logging.info(
+                        "skip %s x %s: no overlapping acquisition dates",
+                        sarunit,
+                        satalti,
+                    )
+                    continue
+                sta = datetime.datetime.combine(window[0], datetime.time())
+                # rrule until= is inclusive: the window end is generated as-is.
+                sto = datetime.datetime.combine(window[1], datetime.time())
             for dd in rrule.rrule(rrule.DAILY, dtstart=sta, until=sto):
                 if args.output_type == "csv":
                     lines_4_csv.append(
