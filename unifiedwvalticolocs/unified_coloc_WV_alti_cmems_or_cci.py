@@ -26,7 +26,11 @@ from scipy.spatial import cKDTree
 from tqdm import tqdm
 
 import unifiedwvalticolocs
-from unifiedwvalticolocs.utils import get_conf_content
+from unifiedwvalticolocs.utils import (
+    POSSIBLES_CCI_ALTI,
+    POSSIBLES_CMEMS_ALTI,
+    get_conf_content,
+)
 
 EARTH_RADIUS_KM = 6371.0088
 logger = logging.getLogger(__name__)
@@ -52,38 +56,6 @@ warnings.filterwarnings(
 
 MAX_NB_MATCHUPS_DEV_MODE = 3
 error_altidb = "altidb %s not handled"
-
-# CCI key:(subdir,beautiful sat name)
-POSSIBLES_CCI_ALTI = {
-    "cfosat": ("cfosat", "CFOSAT"),
-    "envisat": ("envisat", "Envisat"),
-    "ers-1": ("ers-1", "ERS-1"),
-    "ers-2": ("ers-2", "ERS-2"),
-    "gfo": ("gfo", "GFO"),
-    "cryosat-2": ("cryosat-2", "CryoSat-2"),
-    "jason-1": ("jason-1", "Jason-1"),
-    "jason-2": ("jason-2", "Jason-2"),
-    "jason-3": ("jason-3", "Jason-3"),
-    "sentinel-3_a": ("sentinel-3_a", "Sentinel-3_A"),
-    "sentinel-3_b": ("sentinel-3_b", "Sentinel-3_B"),
-    "sentinel-6_a": ("sentinel-6_a", "Sentinel-6_A"),
-    "topex-poseidon_poseidon": ("topex-poseidon_poseidon", "Topex-Poseidon"),
-    "topex-poseidon_topex": ("topex-poseidon_topex", "Topex-Poseidon"),
-    "saral": ("saral", "SARAL"),
-    "swot": ("swot", "SWOT"),
-}
-POSSIBLES_CMEMS_ALTI = {
-    "SARAL": "al",
-    "cryosat-2": "c2",
-    "CFOSAT": "cfo",
-    "Jason-3": "j3",
-    "Sentinel-3A": "s3a",
-    "Sentinel-3B": "s3b",
-    "HY2B": "h2b",
-    "HY2C": "h2c",
-    "Sentinel-6A": "s6a",
-    "SWOT-Nadir": "swon",
-}
 
 VAR_NAMES = {
     "cci": {

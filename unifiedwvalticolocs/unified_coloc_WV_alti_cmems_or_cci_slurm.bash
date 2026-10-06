@@ -4,6 +4,16 @@
 #SBATCH --job-name=unifiedcolocAltiWV
 #SBATCH --mail-type=NONE
 
+# Single-shot SLURM task script for the WV x altimeter coloc.
+#
+#   Single task: sbatch _slurm.bash --startdate 20240101 --sat S1A \
+#                   --alt cmems_Jason-3 --outputdir DIR --config CONF
+#   Job array:   submit a txt listing (one task per line, from
+#                   create-unified-wv-alti-job-array-listing --output-type txt)
+#                   with turboblast:
+#                   turboblaster --listing-input listing.txt \
+#                       --bash-slurm-exec /path/to/_slurm.bash ...
+
 # Configuration
 optssimg="exec -B /scale/reference/ -B /legacy/project/cersat/public -B /scratch -B /ontap"
 
@@ -56,13 +66,13 @@ while [[ $# -gt 0 ]]; do
         --redo)         REDO="--redo";  shift 1 ;;
         --dev)          DEV="--dev";    shift 1 ;;
         -h|--help)      usage;          exit 0 ;;
-        *) echo "Unknown option: $1"; usage; exit 1 ;;
+        *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
 done
 
 # Validation: Check if required arguments are provided
 if [[ -z "$STARTDATE" || -z "$SAT" || -z "$ALT" || -z "$OUTPUTDIR" || -z "$CONFIG" ]]; then
-    echo "Error: Missing required arguments."
+    echo "Error: Missing required arguments." >&2
     usage
     exit 1
 fi

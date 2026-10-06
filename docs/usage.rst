@@ -84,13 +84,41 @@ it and adjust the paths and matching thresholds for your environment.
 HPC job arrays
 --------------
 
-For production runs, generate a listing and submit it as a PBS/SLURM job
-array (see the ``.pbs`` / ``_slurm.bash`` / ``_prun.py`` scripts in the
-package):
+For production runs, generate a listing and submit it as a PBS or SLURM job
+array. Without ``--start``/``--stop`` each SAR x altimeter pair defaults to
+the intersection of its acquisition windows (pairs with no overlap are
+skipped).
+
+SLURM: submit the listing with
+`turboblast <https://github.com/umr-lops/turboblast>`_ (``pip install
+turboblast``), which chunks large listings to respect the cluster's array
+limits:
+
+.. code-block:: bash
+
+   create-unified-wv-alti-job-array-listing \
+       --infra hpc \
+       --outputpath-csv /scratch/$USER/listing.txt \
+       --output-type txt \
+       --sar-units S1A --alt cmems_Jason-3
+
+   SLURM_SCRIPT=$(python -c 'import os, unifiedwvalticolocs as u; print(os.path.join(os.path.dirname(u.__file__), "unified_coloc_WV_alti_cmems_or_cci_slurm.bash"))')
+
+   turboblaster \
+       --listing-input /scratch/$USER/listing.txt \
+       --bash-slurm-exec "$SLURM_SCRIPT" \
+       --slurm-partition cpu --mem 5G --timeout-min 1180
+
+``turboblaster`` blocks until all tasks finish, with a live progress bar
+(run it under ``tmux``/``nohup`` for multi-day runs).
+
+The PBS (``.pbs``) and prun (``_prun.py``) launchers consume the same
+listing format, e.g.:
 
 .. code-block:: bash
 
    create-unified-wv-alti-job-array-listing \
        --infra ice \
-       --outputpath-csv /path/to/listing.csv \
+       --outputpath-csv /path/to/listing.txt \
+       --output-type txt \
        --start 20260101 --stop 20260131
