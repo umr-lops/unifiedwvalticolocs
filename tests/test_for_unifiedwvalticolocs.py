@@ -12,6 +12,7 @@ from scipy.spatial import cKDTree
 
 from unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci import (
     from_npdt64_to_dt,
+    get_path_alti,
     haversine,
     is_cmems_file_matching_in_time,
     latlon_to_xyz,
@@ -20,6 +21,7 @@ from unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci import (
     step_2_geographic_match,
     step_3_closer_temp_match,
 )
+from unifiedwvalticolocs.utils import all_altimeters
 
 
 class TestHelpers:
@@ -289,3 +291,24 @@ class TestSteps:
                 altidb="unknown_db",
                 cpt=cpt,
             )
+
+
+class TestGetPathAlti:
+    """Regression: every name produced by all_altimeters() must round-trip
+    through get_path_alti (the CCI catalog keys contain underscores)."""
+
+    CONF = {
+        "cmems_dir": "/x/",
+        "subset_alti_name_dir": "y_%s",
+        "cci_alti_dir": "/c/",
+    }
+
+    @pytest.mark.parametrize("alt", all_altimeters())
+    def test_round_trip(self, alt: str):
+        altidb = alt.partition("_")[0]
+        get_path_alti(altidb, alt, conf=self.CONF)
+
+    def test_cci_key_with_underscore(self):
+        """cci_sentinel-3_a must resolve to the catalog key, not 'sentinel-3'."""
+        _, acronym, _ = get_path_alti("cci", "cci_sentinel-3_a", conf=self.CONF)
+        assert acronym == "sentinel-3_a"
