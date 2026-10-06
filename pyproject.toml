@@ -119,6 +119,7 @@ exclude = '''
     | env
     | venv
 )/
+| _version\.py
 '''
 
 [tool.isort]
