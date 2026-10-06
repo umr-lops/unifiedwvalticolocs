@@ -78,8 +78,8 @@ The config file (YAML) provides the data locations and matching thresholds:
 - ``delta_dist_km``: maximum SAR–altimeter distance (km).
 - ``delta_t_minutes``: maximum SAR–altimeter time gap (minutes).
 
-Sample configs are shipped in the package: ``config.yml`` (HPC paths) and
-``localconfig_new_storage.yml``.
+A sample config is shipped in the package (``config.yml``, HPC paths); copy
+it and adjust the paths and matching thresholds for your environment.
 
 HPC job arrays
 --------------
