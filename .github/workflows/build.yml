@@ -19,9 +19,6 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        env:
-          # 1. INJECT THE SECRET HERE
-          CI_JOB_TOKEN: ${{ secrets.CI_JOB_TOKEN }}
         run: |
           pip install -e ".[dev]"
 
