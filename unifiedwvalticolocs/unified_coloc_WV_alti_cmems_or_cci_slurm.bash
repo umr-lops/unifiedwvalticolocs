@@ -14,6 +14,10 @@
 #                   turboblaster --listing-input listing.txt \
 #                       --bash-slurm-exec /path/to/_slurm.bash ...
 
+# Propagate any failure (notably apptainer's exit code) so the SLURM task
+# is marked FAILED instead of silently completing.
+set -e
+
 # Configuration
 optssimg="exec -B /scale/reference/ -B /legacy/project/cersat/public -B /scratch -B /ontap"
 
