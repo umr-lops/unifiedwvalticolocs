@@ -1,77 +1,110 @@
-# Poetry pyproject.toml: https://python-poetry.org/docs/pyproject/
 [build-system]
-requires = ["poetry_core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "unifiedwvalticolocs"
+dynamic = ["version"]
 description = "lib python to generate colocs S1 WV with CMEMS or CCI seatstate altimeters"
 readme = "README.md"
-license = "MIT"
-authors = [
-  { name = "umr-lops", email = "antoine.grouazel@ifremer.fr" }
+license = { text = "MIT" }
+authors = [{ name = "umr-lops", email = "antoine.grouazel@ifremer.fr" }]
+keywords = [
+  "colocation",
+  "sentinel1",
+  "altimeters",
+  "CMEMS",
+  "Level-2",
+  "ocean",
+  "SWH",
+  "WV",
 ]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+requires-python = ">=3.11"
+
 dependencies = [
-    "xarray==2025.12.0",
-    "pandas==3.0.0",
-    "tqdm==4.67.1",
-    "scipy==1.17.0",
-    "h5netcdf==1.8.1",
-    "s1ifr",
-    "h5py (>=3.15.1,<4.0.0)",
-    "dask (>=2026.1.1,<2027.0.0)",
-    "pyyaml (>=6.0.3,<7.0.0)"
+  "xarray",
+  "pandas",
+  "tqdm",
+  "scipy",
+  "h5netcdf",
+  "h5py",
+  "dask",
+  "pyyaml",
 ]
-requires-python = ">=3.11,<4.0"
-# Keywords description https://python-poetry.org/docs/pyproject/#keywords
-keywords = ["colocation","sentinel1","altimeters","CMEMS","Level-2","ocean","SWH","WV"]
-dynamic = ["version", "classifiers"]
+
+[project.optional-dependencies]
+dev = [
+  "bandit",
+  "black",
+  "cartopy",
+  "darglint",
+  "flake8",
+  "isort[colors]",
+  "matplotlib",
+  "mypy",
+  "mypy-extensions",
+  "pre-commit",
+  "pydocstyle",
+  "pylint",
+  "pytest",
+  "pyupgrade",
+  "safety",
+  "shapely",
+  "coverage",
+  "coverage-badge",
+  "pytest-html",
+  "pytest-cov",
+]
+viz = [
+  "cartopy",
+  "matplotlib",
+  "shapely",
+]
+docs = [
+  "sphinx",
+  "sphinx-rtd-theme",
+]
 
 [project.urls]
 repository = "https://github.com/umr-lops/unifiedwvalticolocs"
 homepage = "https://github.com/umr-lops/unifiedwvalticolocs"
 
-[tool.poetry]
-version = "2026.4.28.post2"
+[project.scripts]
+procunifiedwvalticolocs = "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci:entrypoint"
+create-unified-wv-alti-job-array-listing = "unifiedwvalticolocs.create_listing_jobarray:entrypoint"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "unifiedwvalticolocs/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["unifiedwvalticolocs"]
+
+[tool.hatch.build.targets.sdist]
+include = ["unifiedwvalticolocs", "tests", "README.md"]
 
 
-
-[[tool.poetry.source]]
-name = "ifremer"
-url = "https://gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple"
-priority = "supplemental"  # or "explicit"
-
-[tool.poetry.dependencies]
-s1ifr = {version = "2026.1.29", source = "ifremer"}
-
-
-
-[tool.poetry.group.dev.dependencies]
-bandit = "^1.9.3"
-black = {version = "^26.1.0", allow-prereleases = true}  # Version 26 doesn't exist yet; 24.x is current stable
-darglint = "^1.8.1" # Warning: Project is unmaintained, 1.8.1 is the last version
-flake8 = "7.3.0"
-isort = {extras = ["colors"], version = "^7.0.0"}
-mypy = "^1.19.1"
-mypy-extensions = "^1.0.0"
-pre-commit = "^4.5.1"
-pydocstyle = "^6.3.0"
-pylint = "^4.0.4"
-pytest = "^9.0.2"
-pyupgrade = "^3.21.2"
-safety = "^3.7.0"
-coverage = "^7.13.2"
-coverage-badge = "^1.1.2"
-pytest-html = "^4.2.0"
-pytest-cov = "^7.0.0"
 
 [tool.black]
-# https://github.com/psf/black
-target-version = ["py39"]
+target-version = ["py311"]
 line-length = 88
 color = true
-
 exclude = '''
 /(
     \.git
@@ -89,10 +122,8 @@ exclude = '''
 '''
 
 [tool.isort]
-# https://github.com/timothycrosley/isort/
-py_version = 39
+py_version = 311
 line_length = 88
-
 known_typing = ["typing", "types", "typing_extensions", "mypy", "mypy_extensions"]
 sections = ["FUTURE", "TYPING", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 include_trailing_comma = true
@@ -105,12 +136,10 @@ color_output = true
 max-line-length = 88
 
 [tool.mypy]
-# https://mypy.readthedocs.io/en/latest/config_file.html#using-a-pyproject-toml-file
 python_version = "3.11"
 pretty = true
 show_traceback = true
 color_output = true
-
 allow_redefinition = false
 check_untyped_defs = true
 disallow_any_generics = true
@@ -130,14 +159,9 @@ warn_unreachable = true
 warn_unused_configs = true
 warn_unused_ignores = true
 
-
 [tool.pytest.ini_options]
-# https://docs.pytest.org/en/6.2.x/customize.html#pyproject-toml
-# Directories that are not visited by pytest collector:
-norecursedirs =["hooks", "*.egg", ".eggs", "dist", "build", "docs", ".tox", ".git", "__pycache__"]
+norecursedirs = ["hooks", "*.egg", ".eggs", "dist", "build", "docs", ".tox", ".git", "__pycache__"]
 doctest_optionflags = ["NUMBER", "NORMALIZE_WHITESPACE", "IGNORE_EXCEPTION_DETAIL"]
-
-# Extra options:
 addopts = [
   "--strict-markers",
   "--tb=short",
@@ -155,7 +179,3 @@ source = ["unifiedwvalticolocs"]
 [tool.coverage.report]
 fail_under = 50
 show_missing = true
-
-[project.scripts]
-procunifiedwvalticolocs = "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci:entrypoint"
-create-unified-wv-alti-job-array-listing = "unifiedwvalticolocs.create_listing_jobarray:entrypoint"

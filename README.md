@@ -2,15 +2,15 @@
 
 <div align="center">
 
-[![Build status](https://github.com/umr-lops/unifiedwvalticolocs/workflows/build/badge.svg?branch=master&event=push)](https://github.com/umr-lops/unifiedwvalticolocs/actions?query=workflow%3Abuild)
+[![Build status](https://github.com/umr-lops/unifiedwvalticolocs/workflows/build/badge.svg?branch=main&event=push)](https://github.com/umr-lops/unifiedwvalticolocs/actions?query=workflow%3Abuild)
 [![Python Version](https://img.shields.io/pypi/pyversions/unifiedwvalticolocs.svg)](https://pypi.org/project/unifiedwvalticolocs/)
 [![Dependencies Status](https://img.shields.io/badge/dependencies-up%20to%20date-brightgreen.svg)](https://github.com/umr-lops/unifiedwvalticolocs/pulls?utf8=%E2%9C%93&q=is%3Apr%20author%3Aapp%2Fdependabot)
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Security: bandit](https://img.shields.io/badge/security-bandit-green.svg)](https://github.com/PyCQA/bandit)
-[![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.pre-commit-config.yaml)
+[![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.pre-commit-config.yaml)
 [![Semantic Versions](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--versions-e10079.svg)](https://github.com/umr-lops/unifiedwvalticolocs/releases)
-[![License](https://img.shields.io/github/license/agrouaze/unifiedwvalticolocs)](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/agrouaze/unifiedwvalticolocs)](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/LICENSE)
 ![Coverage Report](assets/images/coverage.svg)
 
 lib python to generate colocs S1 WV with CMEMS or CCI seatstate altimeters
@@ -27,23 +27,26 @@ lib python to generate colocs S1 WV with CMEMS or CCI seatstate altimeters
 cd unifiedwvalticolocs && git init
 ```
 
-2. If you don't have `Poetry` installed run:
+2. Create a virtual environment and install the project in editable mode with its dev dependencies:
 
 ```bash
-make poetry-download
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-3. Initialize poetry and install `pre-commit` hooks:
+(any Python 3.11+ environment works — `venv`, `conda`/`micromamba`, or `uv venv`)
+
+3. Install `pre-commit` hooks:
 
 ```bash
-make install
-make pre-commit-install
+pre-commit install
 ```
 
 4. Run the codestyle:
 
 ```bash
-make codestyle
+pre-commit run --all-files
 ```
 
 5. Upload initial code to GitHub:
@@ -61,21 +64,22 @@ git push -u origin main
 - Set up [Dependabot](https://docs.github.com/en/github/administering-a-repository/enabling-and-disabling-version-updates#enabling-github-dependabot-version-updates) to ensure you have the latest dependencies.
 - Set up [Stale bot](https://github.com/apps/stale) for automatic issue closing.
 
-### Poetry
+### Packaging: Hatchling
 
-Want to know more about Poetry? Check [its documentation](https://python-poetry.org/docs/).
+The project is packaged with [`Hatchling`](https://hatch.pypa.io/latest/build/) as the build backend, with [`hatch-vcs`](https://github.com/ofek/hatch-vcs) deriving the package version straight from git tags — there's no version to bump by hand in `pyproject.toml`.
 
 <details>
-<summary>Details about Poetry</summary>
+<summary>Details about the build backend</summary>
 <p>
 
-Poetry's [commands](https://python-poetry.org/docs/cli/#commands) are very intuitive and easy to learn, like:
+Everything project- and dependency-related lives in [`pyproject.toml`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/pyproject.toml) under the standard `[project]` table (PEP 621) — no separate `setup.cfg` or lockfile-driven workflow. Useful commands:
 
-- `poetry add numpy@latest`
-- `poetry run pytest`
-- `poetry publish --build`
+- `pip install -e ".[dev]"` — editable install with dev tools
+- `pytest` — run tests
+- `python -m build` — build sdist + wheel
+- `twine upload dist/*` — publish to PyPI
 
-etc
+If you use [`uv`](https://docs.astral.sh/uv/) instead of plain `pip`, the equivalents are `uv pip install -e ".[dev]"` and `uv build`.
 
 </p>
 </details>
@@ -84,10 +88,10 @@ etc
 
 Building a new version of the application contains steps:
 
-- Bump the version of your package `poetry version <version>`. You can pass the new version explicitly, or a rule such as `major`, `minor`, or `patch`. For more details, refer to the [Semantic Versions](https://semver.org/) standard.
-- Make a commit to `GitHub`.
-- Create a `GitHub release`.
-- And... publish 🙂 `poetry publish --build`
+- Tag the commit with the new version, e.g. `git tag 2026.5.1` (hatch-vcs reads this to set the package version — no file to edit). Follow [Semantic Versions](https://semver.org/) for the tag name.
+- Push the tag to `GitHub`: `git push origin 2026.5.1`.
+- Create a `GitHub release` from that tag.
+- Build and publish: `python -m build && twine upload dist/*` (or `uv build && uv publish`).
 
 ## 🎯 What's next
 
@@ -115,28 +119,28 @@ Articles:
 
 ### Development features
 
-- Supports for `Python 3.9` and higher.
-- [`Poetry`](https://python-poetry.org/) as the dependencies manager. See configuration in [`pyproject.toml`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/pyproject.toml) and [`setup.cfg`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/setup.cfg).
+- Supports `Python 3.11` and higher.
+- [`Hatchling`](https://hatch.pypa.io/latest/build/) as the build backend, with [`hatch-vcs`](https://github.com/ofek/hatch-vcs) for git-tag-based versioning. See configuration in [`pyproject.toml`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/pyproject.toml).
 - Automatic codestyle with [`black`](https://github.com/psf/black), [`isort`](https://github.com/timothycrosley/isort) and [`pyupgrade`](https://github.com/asottile/pyupgrade).
 - Ready-to-use [`pre-commit`](https://pre-commit.com/) hooks with code-formatting.
 - Type checks with [`mypy`](https://mypy.readthedocs.io); docstring checks with [`darglint`](https://github.com/terrencepreilly/darglint); security checks with [`safety`](https://github.com/pyupio/safety) and [`bandit`](https://github.com/PyCQA/bandit)
 - Testing with [`pytest`](https://docs.pytest.org/en/latest/).
-- Ready-to-use [`.editorconfig`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.editorconfig), [`.dockerignore`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.dockerignore), and [`.gitignore`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.gitignore). You don't have to worry about those things.
+ - Ready-to-use [`.editorconfig`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.editorconfig) and [`.gitignore`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.gitignore). You don't have to worry about those things.
 
 ### Deployment features
 
 - `GitHub` integration: issue and pr templates.
-- `Github Actions` with predefined [build workflow](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.github/workflows/build.yml) as the default CI/CD.
-- Everything is already set up for security checks, codestyle checks, code formatting, testing, linting, docker builds, etc with [`Makefile`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/Makefile#L89). More details in [makefile-usage](#makefile-usage).
-- [Dockerfile](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/docker/Dockerfile) for your package.
+- `Github Actions` with predefined [build workflow](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.github/workflows/build.yml) as the default CI/CD.
+ - Everything is already set up for security checks, codestyle checks, code formatting, testing, linting, etc with [`Makefile`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/Makefile#L89). More details in [makefile-usage](#makefile-usage).
+ - Apptainer image definition in [`apptainer.def`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/apptainer.def) for HPC runs.
 - Always up-to-date dependencies with [`@dependabot`](https://dependabot.com/). You will only [enable it](https://docs.github.com/en/github/administering-a-repository/enabling-and-disabling-version-updates#enabling-github-dependabot-version-updates).
-- Automatic drafts of new releases with [`Release Drafter`](https://github.com/marketplace/actions/release-drafter). You may see the list of labels in [`release-drafter.yml`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.github/release-drafter.yml). Works perfectly with [Semantic Versions](https://semver.org/) specification.
+- Automatic drafts of new releases with [`Release Drafter`](https://github.com/marketplace/actions/release-drafter). You may see the list of labels in [`release-drafter.yml`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.github/release-drafter.yml). Works perfectly with [Semantic Versions](https://semver.org/) specification.
 
 ### Open source community features
 
-- Ready-to-use [Pull Requests templates](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.github/PULL_REQUEST_TEMPLATE.md) and several [Issue templates](https://github.com/umr-lops/unifiedwvalticolocs/tree/master/.github/ISSUE_TEMPLATE).
+- Ready-to-use [Pull Requests templates](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.github/PULL_REQUEST_TEMPLATE.md) and several [Issue templates](https://github.com/umr-lops/unifiedwvalticolocs/tree/main/.github/ISSUE_TEMPLATE).
 - Files such as: `LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md` are generated automatically.
-- [`Stale bot`](https://github.com/apps/stale) that closes abandoned issues after a period of inactivity. (You will only [need to setup free plan](https://github.com/marketplace/stale)). Configuration is [here](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.github/.stale.yml).
+- [`Stale bot`](https://github.com/apps/stale) that closes abandoned issues after a period of inactivity. (You will only [need to setup free plan](https://github.com/marketplace/stale)). Configuration is [here](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.github/.stale.yml).
 - [Semantic Versions](https://semver.org/) specification with [`Release Drafter`](https://github.com/marketplace/actions/release-drafter).
 
 ## Installation
@@ -145,37 +149,25 @@ Articles:
 pip install -U unifiedwvalticolocs
 ```
 
-or install with `Poetry`
+or with [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
-poetry add unifiedwvalticolocs
+uv pip install -U unifiedwvalticolocs
 ```
+
+For development (editable install with dev tools):
+
+```bash
+pip install -e ".[dev]"
+```
+
 
 ### Makefile usage
 
-[`Makefile`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/Makefile) contains a lot of functions for faster development.
+[`Makefile`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/Makefile) contains a lot of functions for faster development.
 
 <details>
-<summary>1. Download and remove Poetry</summary>
-<p>
-
-To download and install Poetry run:
-
-```bash
-make poetry-download
-```
-
-To uninstall
-
-```bash
-make poetry-remove
-```
-
-</p>
-</details>
-
-<details>
-<summary>2. Install all dependencies and pre-commit hooks</summary>
+<summary>1. Install all dependencies and pre-commit hooks</summary>
 <p>
 
 Install requirements:
@@ -184,7 +176,7 @@ Install requirements:
 make install
 ```
 
-Pre-commit hooks coulb be installed after `git init` via
+Pre-commit hooks could be installed after `git init` via
 
 ```bash
 make pre-commit-install
@@ -194,7 +186,7 @@ make pre-commit-install
 </details>
 
 <details>
-<summary>3. Codestyle</summary>
+<summary>2. Codestyle</summary>
 <p>
 
 Automatic formatting uses `pyupgrade`, `isort` and `black`.
@@ -214,34 +206,30 @@ make check-codestyle
 
 > Note: `check-codestyle` uses `isort`, `black` and `darglint` library
 
-Update all dev libraries to the latest version using one comand
+Update all dev libraries to the latest version using one command
 
 ```bash
 make update-dev-deps
 ```
 
+</p>
+</details>
+
 <details>
-<summary>4. Code security</summary>
+<summary>3. Code security</summary>
 <p>
 
 ```bash
 make check-safety
 ```
 
-This command launches `Poetry` integrity checks as well as identifies security issues with `Safety` and `Bandit`.
-
-```bash
-make check-safety
-```
-
-</p>
-</details>
+This command identifies security issues with `Safety` and `Bandit`.
 
 </p>
 </details>
 
 <details>
-<summary>5. Type checks</summary>
+<summary>4. Type checks</summary>
 <p>
 
 Run `mypy` static type checker
@@ -254,7 +242,7 @@ make mypy
 </details>
 
 <details>
-<summary>6. Tests with coverage badges</summary>
+<summary>5. Tests with coverage badges</summary>
 <p>
 
 Run `pytest`
@@ -267,7 +255,7 @@ make test
 </details>
 
 <details>
-<summary>7. All linters</summary>
+<summary>6. All linters</summary>
 <p>
 
 Of course there is a command to ~~rule~~ run all linters in one:
@@ -286,32 +274,7 @@ make test && make check-codestyle && make mypy && make check-safety
 </details>
 
 <details>
-<summary>8. Docker</summary>
-<p>
-
-```bash
-make docker-build
-```
-
-which is equivalent to:
-
-```bash
-make docker-build VERSION=latest
-```
-
-Remove docker image with
-
-```bash
-make docker-remove
-```
-
-More information [about docker](https://github.com/umr-lops/unifiedwvalticolocs/tree/master/docker).
-
-</p>
-</details>
-
-<details>
-<summary>9. Cleanup</summary>
+<summary>7. Cleanup</summary>
 <p>
 Delete pycache files
 
@@ -350,9 +313,9 @@ make cleanup
 
 You can see the list of available releases on the [GitHub Releases](https://github.com/umr-lops/unifiedwvalticolocs/releases) page.
 
-We follow [Semantic Versions](https://semver.org/) specification.
+We follow [Semantic Versions](https://semver.org/) specification. Versions are tagged in git and read automatically at build time by `hatch-vcs` — there is no version field to update by hand.
 
-We use [`Release Drafter`](https://github.com/marketplace/actions/release-drafter). As pull requests are merged, a draft release is kept up-to-date listing the changes, ready to publish when you’re ready. With the categories option, you can categorize pull requests in release notes using labels.
+We use [`Release Drafter`](https://github.com/marketplace/actions/release-drafter). As pull requests are merged, a draft release is kept up-to-date listing the changes, ready to publish when you're ready. With the categories option, you can categorize pull requests in release notes using labels.
 
 ### List of labels and corresponding titles
 
@@ -365,15 +328,15 @@ We use [`Release Drafter`](https://github.com/marketplace/actions/release-drafte
 |            `documentation`            |    📝 Documentation     |
 |            `dependencies`             | ⬆️ Dependencies updates |
 
-You can update it in [`release-drafter.yml`](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/.github/release-drafter.yml).
+You can update it in [`release-drafter.yml`](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.github/release-drafter.yml).
 
 GitHub creates the `bug`, `enhancement`, and `documentation` labels for you. Dependabot creates the `dependencies` label. Create the remaining labels on the Issues tab of your GitHub repository, when you need them.
 
 ## 🛡 License
 
-[![License](https://img.shields.io/github/license/agrouaze/unifiedwvalticolocs)](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/agrouaze/unifiedwvalticolocs)](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/LICENSE)
 
-This project is licensed under the terms of the `MIT` license. See [LICENSE](https://github.com/umr-lops/unifiedwvalticolocs/blob/master/LICENSE) for more details.
+This project is licensed under the terms of the `MIT` license. See [LICENSE](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/LICENSE) for more details.
 
 ## 📃 Citation
 

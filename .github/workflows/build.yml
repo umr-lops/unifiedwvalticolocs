@@ -7,21 +7,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11"] # Changed to 3.11 to match your Dockerfile/Project
+        python-version: ["3.11"]
 
     steps:
-      - uses: actions/checkout@v7 # v4 is the current stable version
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7 # v5 is the current stable version
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
 
-      - name: Install poetry
-        run: make poetry-download
+      - name: Install dependencies
 
       - name: Set up cache
-        uses: actions/cache@v6 # v4 is the current stable version
+        uses: actions/cache@v5 # v4 is the current stable version
         with:
           path: .venv
           key: venv-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}-${{ hashFiles('poetry.lock') }}
@@ -31,13 +31,7 @@ jobs:
           # 1. INJECT THE SECRET HERE
           CI_JOB_TOKEN: ${{ secrets.CI_JOB_TOKEN }}
         run: |
-          poetry config virtualenvs.in-project true
-
-          # 2. CONFIGURE PRIVATE REPO (Same logic as your Dockerfile)
-          poetry config repositories.ifremer https://gitlab.ifremer.fr/api/v4/projects/4991/packages/pypi/simple
-          poetry config http-basic.ifremer gitlab-ci-token $CI_JOB_TOKEN
-
-          poetry install --no-interaction
+          pip install -e ".[dev]"
 
       - name: Run style checks
         run: |
