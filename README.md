@@ -10,7 +10,7 @@
 [![Security: bandit](https://img.shields.io/badge/security-bandit-green.svg)](https://github.com/PyCQA/bandit)
 [![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/.pre-commit-config.yaml)
 [![Semantic Versions](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--versions-e10079.svg)](https://github.com/umr-lops/unifiedwvalticolocs/releases)
-[![License](https://img.shields.io/github/license/agrouaze/unifiedwvalticolocs)](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/umr-lops/unifiedwvalticolocs)](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/LICENSE)
 ![Coverage Report](assets/images/coverage.svg)
 
 lib python to generate colocs S1 WV with CMEMS or CCI seatstate altimeters
@@ -334,7 +334,7 @@ GitHub creates the `bug`, `enhancement`, and `documentation` labels for you. Dep
 
 ## 🛡 License
 
-[![License](https://img.shields.io/github/license/agrouaze/unifiedwvalticolocs)](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/umr-lops/unifiedwvalticolocs)](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/LICENSE)
 
 This project is licensed under the terms of the `MIT` license. See [LICENSE](https://github.com/umr-lops/unifiedwvalticolocs/blob/main/LICENSE) for more details.
 
