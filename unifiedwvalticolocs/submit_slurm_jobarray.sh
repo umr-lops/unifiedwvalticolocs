@@ -76,9 +76,10 @@ if [[ "$NROWS" -le 0 ]]; then
     exit 1
 fi
 
-# 3) Per-task script sits next to this one (installed with the package).
+# 3) Task script (array mode of the single-shot SLURM script) sits next to
+#    this one (installed with the package).
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TASK_SCRIPT="$SELF_DIR/unified_coloc_WV_alti_cmems_or_cci_slurm_array.bash"
+TASK_SCRIPT="$SELF_DIR/unified_coloc_WV_alti_cmems_or_cci_slurm.bash"
 if [[ ! -f "$TASK_SCRIPT" ]]; then
     echo "Error: per-task script not found: $TASK_SCRIPT" >&2
     exit 1

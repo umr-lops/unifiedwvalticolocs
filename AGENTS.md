@@ -29,7 +29,7 @@ make codestyle                   # auto-fix formatting (pyupgrade, isort, black)
 
 - `unifiedwvalticolocs/unified_coloc_WV_alti_cmems_or_cci.py` — the whole pipeline: `core_coloc()` + CLI `entrypoint()` (~1200 lines, steps `step_0` … `step_3`).
 - `unifiedwvalticolocs/create_listing_jobarray.py` — builds CSV job-array listings for HPC (CLI: `create-unified-wv-alti-job-array-listing`, `--infra ice|hpc`).
-- `unifiedwvalticolocs/unified_coloc_WV_alti_cmems_or_cci_pbs`, `..._slurm.bash`, `..._prun.py` — HPC glue (PBS/SLURM/prun submission, Apptainer `.sif` images). They contain hardcoded HPC paths (`/scale/...`, `/appli/...`) and legacy `python2.7` shebangs; do not "fix" these casually, they target specific machines.
+- `unifiedwvalticolocs/unified_coloc_WV_alti_cmems_or_cci_pbs`, `..._slurm.bash`, `..._prun.py` — HPC glue (PBS/SLURM/prun submission, Apptainer `.sif` images). `_slurm.bash` is dual-mode: single-shot (`--startdate ...`) or job array (`--listing CSV`, one array task per row). `submit_slurm_jobarray.sh` builds the listing and submits the array. They contain hardcoded HPC paths (`/scale/...`, `/appli/...`) and legacy `python2.7` shebangs; do not "fix" these casually, they target specific machines.
 - `unifiedwvalticolocs/config.yml` — sample runtime config with HPC data paths; the CLI `--config` arg points to a real config at runtime. `localconfig_new_storage.yml` is a local variant.
 - `unifiedwvalticolocs/data4tests/` — small SAR NetCDF fixture used by tests; keep tests self-contained with synthetic `xarray` data + this fixture, no network access.
 

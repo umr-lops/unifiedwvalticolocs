@@ -85,8 +85,19 @@ HPC job arrays
 --------------
 
 For production runs, generate a listing and submit it as a PBS/SLURM job
-array (see the ``.pbs`` / ``_slurm.bash`` / ``_prun.py`` scripts in the
-package):
+array. Without ``--start``/``--stop`` each SAR x altimeter pair defaults to
+the intersection of its acquisition windows (pairs with no overlap are
+skipped). On SLURM, ``submit_slurm_jobarray.sh`` builds the listing and
+submits one array task per row:
+
+.. code-block:: bash
+
+   ./submit_slurm_jobarray.sh \
+       --outputpath-csv /path/to/listing.csv \
+       --sar-units S1A --alt cmems_Jason-3
+
+The PBS (``.pbs``) and prun (``_prun.py``) launchers consume the same
+listing, e.g.:
 
 .. code-block:: bash
 

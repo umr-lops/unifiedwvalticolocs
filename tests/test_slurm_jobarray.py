@@ -16,7 +16,7 @@ from unifiedwvalticolocs.utils import (
 )
 
 PACKAGE_DIR = Path(unifiedwvalticolocs.__file__).parent
-TASK_SCRIPT = PACKAGE_DIR / "unified_coloc_WV_alti_cmems_or_cci_slurm_array.bash"
+TASK_SCRIPT = PACKAGE_DIR / "unified_coloc_WV_alti_cmems_or_cci_slurm.bash"
 SUBMIT_SCRIPT = PACKAGE_DIR / "submit_slurm_jobarray.sh"
 
 
