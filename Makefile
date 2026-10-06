@@ -3,10 +3,6 @@ SHELL := /usr/bin/env bash
 PYTHON := python
 PYTHONPATH := `pwd`
 
-#* Docker variables
-IMAGE := unifiedwvalticolocs
-VERSION := latest
-
 #* Installation
 .PHONY: install
 install:
@@ -64,24 +60,6 @@ update-dev-deps:
 .PHONY: docs
 docs:
 	sphinx-build -b html docs docs/_build/html
-
-#* Docker
-# Example: make docker-build VERSION=latest
-# Example: make docker-build IMAGE=some_name VERSION=2026.1.27
-.PHONY: docker-build
-docker-build:
-	@echo Building docker $(IMAGE):$(VERSION) ...
-	docker build \
-		-t $(IMAGE):$(VERSION) . \
-		-f ./docker/Dockerfile --no-cache \
-	        --build-arg CI_JOB_TOKEN=${CI_JOB_TOKEN}
-
-# Example: make docker-remove VERSION=latest
-# Example: make docker-remove IMAGE=some_name VERSION=2026.1.27
-.PHONY: docker-remove
-docker-remove:
-	@echo Removing docker $(IMAGE):$(VERSION) ...
-	docker rmi -f $(IMAGE):$(VERSION)
 
 #* Cleaning
 .PHONY: pycache-remove
