@@ -903,16 +903,17 @@ def get_path_alti(altidb: str, alt: str, conf: dict) -> tuple[str, str, str]:
         "cmems": os.path.join(cmems_dir, subset_alti_name_dir),
         "cci": conf["cci_alti_dir"],
     }
+    # Split on the FIRST underscore only: CCI catalog keys may contain
+    # underscores themselves (e.g. "sentinel-3_a", "topex-poseidon_topex").
+    mission = alt.partition("_")[2]
     if altidb == "cci":
         path_altimeter = os.path.join(PATH_ALT[altidb])
         swh_varname = "swh_denoised"
-        acronym_alti_path_ifr = alt.split("_")[1]
+        acronym_alti_path_ifr = mission
     elif altidb == "cmems":
-        path_altimeter = os.path.join(
-            PATH_ALT[altidb] % POSSIBLES_CMEMS_ALTI[alt.split("_")[1]]
-        )
+        path_altimeter = os.path.join(PATH_ALT[altidb] % POSSIBLES_CMEMS_ALTI[mission])
         swh_varname = "VAVH"
-        acronym_alti_path_ifr = POSSIBLES_CMEMS_ALTI[alt.split("_")[1]]
+        acronym_alti_path_ifr = POSSIBLES_CMEMS_ALTI[mission]
         if acronym_alti_path_ifr == "swon":
             acronym_alti_path_ifr = "swot"
     else:
