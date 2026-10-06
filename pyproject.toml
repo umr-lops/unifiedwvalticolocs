@@ -74,6 +74,9 @@ viz = [
 docs = [
   "sphinx",
   "sphinx-rtd-theme",
+  "cartopy",
+  "matplotlib",
+  "shapely",
 ]
 
 [project.urls]
