@@ -4,13 +4,15 @@
 #SBATCH --job-name=unifiedcolocAltiWV
 #SBATCH --mail-type=NONE
 
-# Single-shot or SLURM job-array entry point for the WV x altimeter coloc.
+# Single-shot SLURM task script for the WV x altimeter coloc.
 #
-#   Single-shot: sbatch _slurm.bash --startdate 20240101 --sat S1A \
+#   Single task: sbatch _slurm.bash --startdate 20240101 --sat S1A \
 #                   --alt cmems_Jason-3 --outputdir DIR --config CONF
-#   Job array:   submit_slurm_jobarray.sh builds a listing CSV and runs
-#                   sbatch --array=0-(N-1) _slurm.bash --listing LISTING.csv
-#               (one array task per CSV row).
+#   Job array:   submit a txt listing (one task per line, from
+#                   create-unified-wv-alti-job-array-listing --output-type txt)
+#                   with turboblast:
+#                   turboblaster --listing-input listing.txt \
+#                       --bash-slurm-exec /path/to/_slurm.bash ...
 
 # Configuration
 optssimg="exec -B /scale/reference/ -B /legacy/project/cersat/public -B /scratch -B /ontap"
@@ -26,7 +28,6 @@ OUTPUTDIR=""
 REDO=""
 DEV=""
 CONFIG=""
-LISTING=""
 
 # Function to display help
 usage() {
@@ -41,9 +42,6 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -i, --image SIF_FILE   Path to the SIF image (default: $IMAGNAME)"
-    echo "  --listing CSV          SLURM job-array mode: one array task per CSV"
-    echo "                         row (header: startdate,sat,alt,outputdir,"
-    echo "                         image,config); requires SLURM_ARRAY_TASK_ID"
     echo "  --redo                 Enable overwrite mode (forces reprocessing)"
     echo "  --dev                  Enable developer mode"
     echo "  -h, --help             Show this help message and exit"
@@ -65,34 +63,12 @@ while [[ $# -gt 0 ]]; do
         -o|--outputdir) OUTPUTDIR="$2"; shift 2 ;;
         -c|--config)    CONFIG="$2";    shift 2 ;;
         -i|--image)     IMAGNAME="$2";  shift 2 ;;
-        --listing)      LISTING="$2";   shift 2 ;;
         --redo)         REDO="--redo";  shift 1 ;;
         --dev)          DEV="--dev";    shift 1 ;;
         -h|--help)      usage;          exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
 done
-
-# Job-array mode: task ID -> listing CSV row.
-if [[ -n "$LISTING" ]]; then
-    if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
-        echo "Error: must run as a SLURM array task (SLURM_ARRAY_TASK_ID unset)." >&2
-        exit 1
-    fi
-    if [[ ! -f "$LISTING" ]]; then
-        echo "Error: listing not found: $LISTING" >&2
-        exit 1
-    fi
-    # Row = task ID + 2 (1-based row number, +1 for the CSV header).
-    LINE=$(( SLURM_ARRAY_TASK_ID + 2 ))
-    ROW=$(sed -n "${LINE}p" "$LISTING")
-    if [[ -z "$ROW" || "$ROW" == "startdate,"* ]]; then
-        echo "Error: task ID $SLURM_ARRAY_TASK_ID out of range for listing $LISTING." >&2
-        exit 1
-    fi
-    IFS=',' read -r STARTDATE SAT ALT OUTPUTDIR IMAGE CONFIG <<< "$ROW"
-    IMAGNAME="${IMAGE:-$IMAGNAME}"
-fi
 
 # Validation: Check if required arguments are provided
 if [[ -z "$STARTDATE" || -z "$SAT" || -z "$ALT" || -z "$OUTPUTDIR" || -z "$CONFIG" ]]; then

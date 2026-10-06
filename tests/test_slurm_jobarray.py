@@ -1,4 +1,4 @@
-"""Tests for the SLURM job-array helpers and default date windows."""
+"""Tests for the SLURM task script, listing defaults and date windows."""
 
 import argparse
 import datetime
@@ -17,7 +17,6 @@ from unifiedwvalticolocs.utils import (
 
 PACKAGE_DIR = Path(unifiedwvalticolocs.__file__).parent
 TASK_SCRIPT = PACKAGE_DIR / "unified_coloc_WV_alti_cmems_or_cci_slurm.bash"
-SUBMIT_SCRIPT = PACKAGE_DIR / "submit_slurm_jobarray.sh"
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +117,10 @@ class TestDefaultDates:
 
 
 # ---------------------------------------------------------------------------
-# SLURM bash scripts (fake apptainer / sbatch on PATH)
+# SLURM task script (fake apptainer on PATH)
+#
+# Job arrays are submitted with turboblast, which runs
+# ``bash _slurm.bash <line>`` for each line of the txt listing.
 # ---------------------------------------------------------------------------
 def _write_fake(path: Path, body: str) -> Path:
     path.write_text("#!/usr/bin/env bash\n" + body)
@@ -126,122 +128,76 @@ def _write_fake(path: Path, body: str) -> Path:
     return path
 
 
-def test_task_script_runs_row(tmp_path, monkeypatch):
-    """Task N reads CSV row N+2 and runs apptainer with those fields."""
-    csv = tmp_path / "listing.csv"
-    csv.write_text(
-        "startdate,sat,alt,outputdir,image,config\n"
-        "20240101,S1A,cmems_Jason-3,/out,/img.sif,/conf.yml\n"
-        "20240102,S1B,cci_cryosat-2,/out,/img.sif,/conf.yml\n"
-    )
+def test_task_script_single_shot(tmp_path, monkeypatch):
+    """One coloc run: the args drive the apptainer call."""
+    import subprocess
+
     calls = tmp_path / "apptainer_calls.txt"
-    fake_apptainer = _write_fake(
-        tmp_path / "apptainer",
-        'echo "$@" >> "%s"\n' % calls,
-    )
+    _write_fake(tmp_path / "apptainer", 'echo "$@" >> "%s"\n' % calls)
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-    monkeypatch.setenv("SLURM_ARRAY_TASK_ID", "1")
-
-    import subprocess
-
-    result = subprocess.run(
-        ["bash", str(TASK_SCRIPT), "--listing", str(csv)],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "SLURM_ARRAY_TASK_ID": "1"},
-    )
-    assert result.returncode == 0, result.stderr
-    called = calls.read_text().splitlines()[0].split()
-    assert "procunifiedwvalticolocs" in called
-    assert "--startdate" in called and "20240102" in called
-    assert "--sat" in called and "S1B" in called
-    assert "--alt" in called and "cci_cryosat-2" in called
-    assert fake_apptainer.exists()
-
-
-def test_task_script_missing_task_id(tmp_path, monkeypatch):
-    """Without SLURM_ARRAY_TASK_ID the script refuses to run."""
-    csv = tmp_path / "listing.csv"
-    csv.write_text("startdate,sat,alt,outputdir,image,config\n")
-    monkeypatch.delenv("SLURM_ARRAY_TASK_ID", raising=False)
-    import subprocess
-
-    result = subprocess.run(
-        ["bash", str(TASK_SCRIPT), "--listing", str(csv)],
-        capture_output=True,
-        text=True,
-        env={k: v for k, v in os.environ.items() if k != "SLURM_ARRAY_TASK_ID"},
-    )
-    assert result.returncode == 1
-    assert "SLURM_ARRAY_TASK_ID" in result.stderr
-
-
-def test_task_script_out_of_range(tmp_path, monkeypatch):
-    """A task ID beyond the CSV rows fails cleanly."""
-    csv = tmp_path / "listing.csv"
-    csv.write_text(
-        "startdate,sat,alt,outputdir,image,config\n"
-        "20240101,S1A,cmems_Jason-3,/out,/img.sif,/conf.yml\n"
-    )
-    import subprocess
-
-    result = subprocess.run(
-        ["bash", str(TASK_SCRIPT), "--listing", str(csv)],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "SLURM_ARRAY_TASK_ID": "42"},
-    )
-    assert result.returncode == 1
-    assert "out of range" in result.stderr
-
-
-def test_submitter_builds_and_submits_array(tmp_path, monkeypatch):
-    """Submitter runs the listing CLI then sbatch --array=0-(N-1)."""
-    listing = tmp_path / "listing.csv"
-    n_rows = 5
-    # Records its arguments and parses --outputpath-csv (like the real CLI).
-    cli_args = tmp_path / "cli_args.txt"
-    _write_fake(
-        tmp_path / "create-unified-wv-alti-job-array-listing",
-        'printf "%s\\n" "$@" >> "' + str(cli_args) + '"\n'
-        'out=""; prev=""\n'
-        'for a in "$@"; do\n'
-        '  if [[ "$prev" == "--outputpath-csv" ]]; then out="$a"; fi\n'
-        '  prev="$a"\n'
-        "done\n"
-        'echo "startdate,sat,alt,outputdir,image,config" > "$out"\n'
-        f"for i in $(seq 1 {n_rows}); do\n"
-        '  echo "20240101,S1A,cmems_Jason-3,/out,/img.sif,/conf.yml"\n'
-        'done >> "$out"\n',
-    )
-    sbatch_calls = tmp_path / "sbatch_calls.txt"
-    _write_fake(
-        tmp_path / "sbatch",
-        'echo "$@" >> "%s"\n' % sbatch_calls,
-    )
-    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-
-    import subprocess
 
     result = subprocess.run(
         [
             "bash",
-            str(SUBMIT_SCRIPT),
-            "--outputpath-csv",
-            str(listing),
-            "--sar-units",
+            str(TASK_SCRIPT),
+            "--startdate",
+            "20240101",
+            "--sat",
             "S1A",
+            "--alt",
+            "cmems_Jason-3",
+            "--outputdir",
+            "/out",
+            "--image",
+            "/img.sif",
+            "--config",
+            "/conf.yml",
         ],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0, result.stderr
-    assert listing.exists()
-    # The listing CLI is always called with --infra hpc (SLURM infra).
-    cli = cli_args.read_text().splitlines()
-    assert "--infra" in cli and "hpc" in cli
-    assert "--sar-units" in cli and "S1A" in cli
-    sbatch_args = sbatch_calls.read_text().splitlines()[0].split()
-    assert "--array=0-4" in sbatch_args
-    assert str(TASK_SCRIPT) in sbatch_args
-    assert "--listing" in sbatch_args and str(listing) in sbatch_args
+    called = calls.read_text().splitlines()[0].split()
+    assert "procunifiedwvalticolocs" in called
+    assert "--startdate" in called and "20240101" in called
+    assert "--sat" in called and "S1A" in called
+    assert "--alt" in called and "cmems_Jason-3" in called
+
+
+def test_task_script_missing_args(tmp_path):
+    """Without the required arguments the script refuses to run."""
+    import subprocess
+
+    result = subprocess.run(
+        ["bash", str(TASK_SCRIPT), "--startdate", "20240101"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "Missing required arguments" in result.stderr
+
+
+def test_txt_listing_line_drives_task_script(tmp_path, monkeypatch):
+    """Each txt listing line is a valid task-script invocation (turboblast contract)."""
+    import shlex
+    import subprocess
+
+    listing = tmp_path / "listing.txt"
+    args = _args(tmp_path, output_type="txt", outputpath_csv=str(listing))
+    create_listing_jobarray(args)
+    line = listing.read_text().splitlines()[0]
+
+    calls = tmp_path / "apptainer_calls.txt"
+    _write_fake(tmp_path / "apptainer", 'echo "$@" >> "%s"\n' % calls)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+
+    result = subprocess.run(
+        ["bash", str(TASK_SCRIPT), *shlex.split(line)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    called = calls.read_text().splitlines()[0]
+    assert "--startdate 20191001" in called
+    assert "--sat S1A" in called
+    assert "--alt cmems_Jason-3" in called
