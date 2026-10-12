@@ -820,7 +820,7 @@ def treat_one_safe_wv(
         # A SAFE with no measurement/*.nc (corrupt/partial download) must not
         # crash xr.concat([]) (issue #52); skip it with an empty SAR dataset.
         logger.warning("no measurement/*.nc found in SAFE %s - skipping", safewv)
-        sar_dataset_safe = colocated_observations
+        sar_dataset_safe = xr.Dataset({"empty": (["time_sar"], [])})
     list_date_sar_dt = step_0_get_sar_dt(sards=sar_dataset_safe)
 
     if ds_alti:
