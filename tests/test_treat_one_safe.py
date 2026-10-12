@@ -139,3 +139,42 @@ class TestTreatSafe:
         assert cpt_res["nb_safe_without_alti_files"] == 1
         assert "oswTotalHs" not in result_ds
         mock_treat.assert_not_called()
+
+    @patch("unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci.step_0_get_sar_dt")
+    @patch(
+        "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci.treat_one_measurement_wv"
+    )
+    @patch("unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci.xr.open_dataset")
+    @patch(
+        "unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci.preprocess_wv_s1_ocn"
+    )
+    @patch("unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci.glob.glob")
+    def test_treat_one_safe_wv_no_measurements(
+        self,
+        mock_glob,
+        mock_pre,
+        mock_open,
+        mock_treat,
+        mock_step0,
+        mock_inputs,
+    ):
+        """A SAFE with no measurement/*.nc must be skipped, not crash (issue #52).
+
+        Previously ``xr.concat([])`` raised ``ValueError: must supply at least
+        one object to concatenate``. Now the SAFE yields an empty dataset and
+        the no-matchup counter is incremented.
+        """
+        # No measurement files in the SAFE.
+        mock_glob.return_value = []
+
+        result_ds, _, cpt_res = treat_one_safe_wv(**mock_inputs)
+
+        # No measurements -> nothing to preprocess/open/colocate.
+        mock_pre.assert_not_called()
+        mock_open.assert_not_called()
+        mock_treat.assert_not_called()
+        # Empty SAR dataset is returned (no time_sar entries) ...
+        assert "oswTotalHs" not in result_ds
+        assert len(result_ds.time_sar) == 0
+        # ... and counted as a SAFE without an alti matchup.
+        assert cpt_res["nb_safe_without-matchup_alti"] == 1
