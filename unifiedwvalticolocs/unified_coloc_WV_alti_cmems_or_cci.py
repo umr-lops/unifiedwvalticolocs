@@ -813,8 +813,14 @@ def treat_one_safe_wv(
         tmpsarmeasu.append(
             preprocess_wv_s1_ocn(xr.open_dataset(measurement_wv_list[iiwv]))
         )
-    sar_dataset_safe = xr.concat(tmpsarmeasu, dim="time_sar").load()
-    logger.debug("all SAR files loaded")
+    if tmpsarmeasu:
+        sar_dataset_safe = xr.concat(tmpsarmeasu, dim="time_sar").load()
+        logger.debug("all SAR files loaded")
+    else:
+        # A SAFE with no measurement/*.nc (corrupt/partial download) must not
+        # crash xr.concat([]) (issue #52); skip it with an empty SAR dataset.
+        logger.warning("no measurement/*.nc found in SAFE %s - skipping", safewv)
+        sar_dataset_safe = xr.Dataset({"empty": (["time_sar"], [])})
     list_date_sar_dt = step_0_get_sar_dt(sards=sar_dataset_safe)
 
     if ds_alti:
