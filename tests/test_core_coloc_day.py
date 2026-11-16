@@ -148,3 +148,17 @@ def test_concat_measurements_wv_drops_duplicated_time_sar():
     out = concat_measurements_wv("a.SAFE", mixed)
     assert out["oswLon"].values.tolist() == [9.0]
     assert out.indexes["time_sar"].is_unique
+
+
+def test_empty_measurement_file_is_skipped(two_safes):
+    """A 0-byte measurement file is ignored, sequential and parallel."""
+    empty = os.path.join(
+        two_safes[0],
+        "measurement",
+        "s1a-wv1-ocn-vv-20260112t045817-20260112t045859-x.nc",
+    )
+    open(empty, "w").close()
+    assert U.read_one_measurement_wv(empty) is None
+    for nproc in (1, 2):
+        out = U.load_sar_safes(two_safes, nproc=nproc)
+        assert len(out[two_safes[0]]["time_sar"]) == 2
