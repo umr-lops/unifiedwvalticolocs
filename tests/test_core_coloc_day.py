@@ -31,7 +31,12 @@ def two_safes(tmp_path):
         safe = tmp_path / f"S1A_WV_OCN__2SSV_{isafe}.SAFE"
         (safe / "measurement").mkdir(parents=True)
         for imeas in range(nmeas):
-            name = os.path.basename(FIXTURE).replace("-036.nc", f"-{imeas:03d}.nc")
+            # time_sar comes from the file name: one distinct time per imagette
+            name = (
+                os.path.basename(FIXTURE)
+                .replace("-036.nc", f"-{imeas:03d}.nc")
+                .replace("t045820-", f"t0458{20 + imeas:02d}-")
+            )
             shutil.copy(FIXTURE, safe / "measurement" / name)
         safes.append(str(safe))
     return safes
@@ -120,3 +125,26 @@ def test_listing_per_day(tmp_path):
     lines = listing.read_text().splitlines()
     assert cpt == len(lines) == 2 * 3
     assert all("--alt all " in ll and ll.endswith("--nproc 8") for ll in lines)
+
+
+def test_concat_measurements_wv_drops_duplicated_time_sar():
+    """A SAFE whose imagettes share one time_sar (early S1A) gives a unique index."""
+    import numpy as np
+    import xarray as xr
+
+    from unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci import (
+        concat_measurements_wv,
+    )
+
+    def meas(t, x):
+        return xr.Dataset(
+            {"oswLon": ("time_sar", [x])},
+            coords={"time_sar": np.array([t], dtype="datetime64[ns]")},
+        )
+
+    same = [meas("2014-11-13T03:42:12", float(i)) for i in range(3)]
+    assert concat_measurements_wv("a.SAFE", same).sizes["time_sar"] == 0
+    mixed = same + [meas("2014-11-13T03:45:00", 9.0)]
+    out = concat_measurements_wv("a.SAFE", mixed)
+    assert out["oswLon"].values.tolist() == [9.0]
+    assert out.indexes["time_sar"].is_unique
