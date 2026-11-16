@@ -36,10 +36,17 @@ Options:
    * - ``--sat``
      - SAR mission, e.g. ``S1A`` or ``S1B`` (required).
    * - ``--alt``
-     - Altimeter, ``cmems_<mission>`` or ``cci_<mission>`` (required).
+     - Altimeter(s), ``cmems_<mission>`` or ``cci_<mission>`` (required).
        CMEMS: SARAL, cryosat-2, CFOSAT, Jason-3, Sentinel-3A/B, HY2B, HY2C,
        Sentinel-6A, SWOT-Nadir. CCI: cryosat-2, jason-2, jason-3,
-       sentinel-3a/b, saral, sentinel-6.
+       sentinel-3a/b, saral, sentinel-6... Several altimeters (space or comma
+       separated) or ``all`` (every altimeter operating that day) run in one
+       process that reads the WV files once; altimeters whose output exists are
+       skipped (unless ``--redo``) and a failure on one altimeter does not stop
+       the others (exit code 1 at the end).
+   * - ``--nproc``
+     - Number of processes reading the WV measurement files (default 8).
+       The reading is latency-bound, so this helps even on a 1-CPU job.
    * - ``--config``
      - Path to the YAML config file (required).
    * - ``--redo``
@@ -108,6 +115,18 @@ limits:
        --listing-input /scratch/$USER/listing.txt \
        --bash-slurm-exec "$SLURM_SCRIPT" \
        --slurm-partition cpu --mem 5G --timeout-min 1180
+
+For a full reprocessing, prefer one task per (day, SAR unit) colocating all
+the altimeters: ``--per-day`` writes ``--alt all`` lines (~7 500 tasks for
+S1A-D instead of ~90 000), each reading the ~2 000 WV files of the day once
+(about 1 min per task with ``--nproc 8``, vs 1-2 min per altimeter before):
+
+.. code-block:: bash
+
+   create-unified-wv-alti-job-array-listing \
+       --infra hpc --per-day --nproc 8 \
+       --outputpath-csv /scratch/$USER/listing_per_day.txt \
+       --output-type txt
 
 ``turboblaster`` blocks until all tasks finish, with a live progress bar
 (run it under ``tmux``/``nohup`` for multi-day runs).

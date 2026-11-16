@@ -6,6 +6,8 @@ Colocates Sentinel-1 WV (wave) OCN Level-2 measurements with CMEMS WAVE L3
 or CCI SeaState L2P altimeter observations, in space and time.
 """
 
+from typing import Any
+
 import argparse
 import copy
 import datetime
@@ -16,7 +18,10 @@ import sys
 import time
 import warnings
 from collections import defaultdict
+from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor
 from datetime import timezone
+from multiprocessing import get_context
 from resource import RUSAGE_SELF, getrusage
 
 import numpy as np
@@ -29,6 +34,8 @@ import unifiedwvalticolocs
 from unifiedwvalticolocs.utils import (
     POSSIBLES_CCI_ALTI,
     POSSIBLES_CMEMS_ALTI,
+    all_altimeters,
+    date_window_for,
     get_conf_content,
 )
 
@@ -814,6 +821,92 @@ def preprocess_wv_s1_ocn(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+def read_one_measurement_wv(measurement_file: str) -> xr.Dataset:
+    """Open, preprocess and load one S1 WV OCN measurement file.
+
+    Module-level function so that it can run in a worker process.
+
+    Args:
+        measurement_file: Path to a ``measurement/*.nc`` file of a WV SAFE.
+
+    Returns:
+        Preprocessed dataset loaded in memory (file closed).
+    """
+    with xr.open_dataset(measurement_file) as ds:
+        return preprocess_wv_s1_ocn(ds).load()
+
+
+def list_measurements_wv(safewv: str) -> list[str]:
+    """List the measurement files of a WV SAFE.
+
+    Args:
+        safewv: Path to the SAFE.
+
+    Returns:
+        List of ``measurement/*.nc`` paths.
+    """
+    return glob.glob(os.path.join(safewv, "measurement", "*.nc"))
+
+
+def concat_measurements_wv(safewv: str, measurements: list[xr.Dataset]) -> xr.Dataset:
+    """Concatenate the preprocessed measurements of one SAFE.
+
+    Args:
+        safewv: Path to the SAFE (for the log).
+        measurements: Preprocessed measurement datasets.
+
+    Returns:
+        Dataset along ``time_sar``; an empty dataset if there is no measurement.
+    """
+    if measurements:
+        return xr.concat(measurements, dim="time_sar").load()
+    # A SAFE with no measurement/*.nc (corrupt/partial download) must not
+    # crash xr.concat([]) (issue #52); skip it with an empty SAR dataset.
+    logger.warning("no measurement/*.nc found in SAFE %s - skipping", safewv)
+    return xr.Dataset({"empty": (["time_sar"], [])})
+
+
+def load_sar_safes(lst_wv_safe: list[str], nproc: int = 1) -> dict[str, xr.Dataset]:
+    """Read all the WV measurements of a list of SAFE, once.
+
+    Reading the ~2000 small measurement files of a day is the bottleneck of the
+    coloc and is latency-bound on the shared file systems: with ``nproc`` > 1
+    the files are read by worker processes (not threads: HDF5 is not
+    thread-safe), which gives a large speed-up even on a 1-CPU allocation.
+
+    Args:
+        lst_wv_safe: Paths to the SAFE.
+        nproc: Number of reader processes (1 = sequential).
+
+    Returns:
+        Dictionary SAFE path -> dataset of its measurements along ``time_sar``.
+    """
+    t0 = time.time()
+    files = {safe: list_measurements_wv(safe) for safe in lst_wv_safe}
+    flat = [ff for safe in lst_wv_safe for ff in files[safe]]
+    if nproc > 1 and len(flat) > 1:
+        with ProcessPoolExecutor(
+            max_workers=nproc, mp_context=get_context("spawn")
+        ) as executor:
+            datasets = list(executor.map(read_one_measurement_wv, flat, chunksize=16))
+    else:
+        datasets = [read_one_measurement_wv(ff) for ff in flat]
+    out = {}
+    start = 0
+    for safe in lst_wv_safe:
+        nb = len(files[safe])
+        out[safe] = concat_measurements_wv(safe, datasets[start : start + nb])
+        start += nb
+    logger.info(
+        "%i WV measurements of %i SAFE read in %1.1f s (nproc=%i)",
+        len(flat),
+        len(lst_wv_safe),
+        time.time() - t0,
+        nproc,
+    )
+    return out
+
+
 def treat_one_measurement_wv(
     sards: xr.Dataset,
     date_sar_dt: datetime.datetime,
@@ -881,6 +974,7 @@ def treat_one_safe_wv(
     conf: dict,
     dev: bool = False,
     progressbar: bool = True,
+    sar_dataset_safe: xr.Dataset | None = None,
 ) -> tuple[xr.Dataset, dict, defaultdict]:
     """Colocate one SAFE OCN WV with altimeters.
 
@@ -894,6 +988,8 @@ def treat_one_safe_wv(
         conf: Configuration dictionary.
         dev: If True, break after few matchups.
         progressbar: If True, show progress bar.
+        sar_dataset_safe: Measurements of the SAFE already read (see
+            ``load_sar_safes``); read from ``safewv`` if None.
 
     Returns:
         Tuple of (colocated_observations, coloc_listing, cpt).
@@ -901,21 +997,15 @@ def treat_one_safe_wv(
     logger.debug("SAR Sentinel-1 WV SAFE to process : %s ", safewv)
     colocated_observations = xr.Dataset({"empty": (["time_sar"], [])})
     cat_alti_mathcups_colocs_ds = []
-    measurement_wv_list = glob.glob(os.path.join(safewv, "measurement", "*.nc"))
-    logger.debug("Number of measurement in the SAFE : %d", len(measurement_wv_list))
-    tmpsarmeasu = []
-    for iiwv in tqdm(range(len(measurement_wv_list)), disable=True):
-        tmpsarmeasu.append(
-            preprocess_wv_s1_ocn(xr.open_dataset(measurement_wv_list[iiwv]))
+    if sar_dataset_safe is None:
+        measurement_wv_list = list_measurements_wv(safewv)
+        logger.debug("Number of measurement in the SAFE : %d", len(measurement_wv_list))
+        sar_dataset_safe = concat_measurements_wv(
+            safewv, [read_one_measurement_wv(ff) for ff in measurement_wv_list]
         )
-    if tmpsarmeasu:
-        sar_dataset_safe = xr.concat(tmpsarmeasu, dim="time_sar").load()
-        logger.debug("all SAR files loaded")
     else:
-        # A SAFE with no measurement/*.nc (corrupt/partial download) must not
-        # crash xr.concat([]) (issue #52); skip it with an empty SAR dataset.
-        logger.warning("no measurement/*.nc found in SAFE %s - skipping", safewv)
-        sar_dataset_safe = xr.Dataset({"empty": (["time_sar"], [])})
+        # shared between the altimeters of a day: never modify it in place
+        sar_dataset_safe = sar_dataset_safe.copy(deep=False)
     list_date_sar_dt = step_0_get_sar_dt(sards=sar_dataset_safe)
 
     if ds_alti:
@@ -1022,59 +1112,25 @@ def get_path_alti(altidb: str, alt: str, conf: dict) -> tuple[str, str, str]:
     return path_altimeter, acronym_alti_path_ifr, swh_varname
 
 
-def core_coloc(
-    day_analyzed: str,
-    alt: str,
-    sarunit: str,
-    outputdir: str,
-    conf: dict,
-    dev: bool = False,
-    redo: bool = False,
-    progressbar: bool = False,
-) -> defaultdict:
-    """Core colocation routine.
+def output_coloc_files(
+    outputdir: str, sarunit: str, alt: str, day_analyzed: str, conf: dict[str, Any]
+) -> tuple[str, str]:
+    """Paths of the daily coloc NetCDF file and of its listing.
 
     Args:
-        day_analyzed: Date to analyze in YYYYMMDD format.
-        alt: Altimeter name (e.g., 'cmems_al').
-        sarunit: SAR mission (S1A, S1B).
         outputdir: Output directory.
-        conf: Configuration dictionary.
-        dev: Development mode flag.
-        redo: If True, redo existing files.
-        progressbar: If True, show progress bar.
+        sarunit: SAR mission (S1A, S1B...).
+        alt: Altimeter name (e.g., 'cmems_SARAL').
+        day_analyzed: Date in YYYYMMDD format.
+        conf: Configuration dictionary (delta_t_minutes, delta_dist_km).
 
     Returns:
-        Counter with statistics.
+        Tuple (NetCDF path, .lst path).
     """
-    date = datetime.datetime.strptime(day_analyzed, "%Y%m%d")
-    cpt = defaultdict(int)
-    Y = date.strftime("%Y")
-    JY = date.strftime("%j")
-    altidb = alt.split("_")[0]
-
-    path_altimeter, acronym_alti_path_ifr, _ = get_path_alti(altidb, alt, conf=conf)
-    logger.info("path_altimeter : %s", path_altimeter)
-    assert os.path.exists(path_altimeter)
-    assert os.path.exists(conf["path_SAR"])
-    long_name_sar_unit = "sentinel-1" + sarunit[-1].lower()
-    pattern_sar = os.path.join(
-        conf["path_SAR"],
-        long_name_sar_unit,
-        "L2",
-        "WV",
-        sarunit + "_WV_OCN__2S",
-        Y,
-        JY,
-        "*.SAFE",
-    )
-    logger.info("SAR ESA Level-2 OCN SAFE pattern : %s", pattern_sar)
-    lst_wv_safe_sorted = sorted(glob.glob(pattern_sar))
-    logger.info("%s SAR WV SAFE found", len(lst_wv_safe_sorted))
-    output_nc_file = os.path.join(
+    base = os.path.join(
         outputdir,
         sarunit + "_" + alt,
-        date.strftime("%Y"),
+        day_analyzed[:4],
         "coloc_"
         + day_analyzed
         + "_"
@@ -1085,32 +1141,97 @@ def core_coloc(
         + str(conf["delta_t_minutes"])
         + "_min_"
         + str(conf["delta_dist_km"])
-        + "_km.nc",
+        + "_km",
     )
-    time.sleep(rng.integers(0, 10))
-    os.makedirs(os.path.dirname(output_nc_file), 0o0775, exist_ok=True)
-    if os.path.exists(output_nc_file) and redo is False:
-        logger.info("output coloc S1-WV alti file already exists (redo is False)")
-        sys.exit(0)
+    return base + ".nc", base + ".lst"
 
-    coloc_listing = {}
+
+def list_sar_safes(day_analyzed: str, sarunit: str, conf: dict[str, Any]) -> list[str]:
+    """List the S1 WV OCN SAFE of a day.
+
+    Args:
+        day_analyzed: Date in YYYYMMDD format.
+        sarunit: SAR mission (S1A, S1B...).
+        conf: Configuration dictionary (path_SAR).
+
+    Returns:
+        Sorted list of SAFE paths.
+    """
+    date = datetime.datetime.strptime(day_analyzed, "%Y%m%d")
+    assert os.path.exists(conf["path_SAR"])
+    pattern_sar = os.path.join(
+        conf["path_SAR"],
+        "sentinel-1" + sarunit[-1].lower(),
+        "L2",
+        "WV",
+        sarunit + "_WV_OCN__2S",
+        date.strftime("%Y"),
+        date.strftime("%j"),
+        "*.SAFE",
+    )
+    logger.info("SAR ESA Level-2 OCN SAFE pattern : %s", pattern_sar)
+    lst_wv_safe_sorted = sorted(glob.glob(pattern_sar))
+    logger.info("%s SAR WV SAFE found", len(lst_wv_safe_sorted))
+    return lst_wv_safe_sorted
+
+
+def coloc_one_alti(
+    day_analyzed: str,
+    alt: str,
+    sarunit: str,
+    outputdir: str,
+    conf: dict[str, Any],
+    lst_wv_safe_sorted: list[str],
+    get_sar_safes: Callable[[], dict[str, xr.Dataset]] | None = None,
+    dev: bool = False,
+    redo: bool = False,
+) -> defaultdict[str, int]:
+    """Colocate the WV SAFE of a day with one altimeter and save the result.
+
+    The caller checks the altimeter path and creates the output directory
+    (see ``prepare_alti``).
+
+    Args:
+        day_analyzed: Date to analyze in YYYYMMDD format.
+        alt: Altimeter name (e.g., 'cmems_SARAL').
+        sarunit: SAR mission (S1A, S1B...).
+        outputdir: Output directory.
+        conf: Configuration dictionary.
+        lst_wv_safe_sorted: SAFE of the day.
+        get_sar_safes: Returns the measurements of the SAFE (read once per day,
+            only called when the altimeter has data); if None, each SAFE is
+            read sequentially by ``treat_one_safe_wv``.
+        dev: Development mode flag.
+        redo: If True, redo existing files.
+
+    Returns:
+        Counter with statistics.
+    """
+    cpt: defaultdict[str, int] = defaultdict(int)
+    altidb = alt.split("_")[0]
+    output_nc_file, output_lst_file = output_coloc_files(
+        outputdir, sarunit, alt, day_analyzed, conf
+    )
+    path_altimeter, acronym_alti_path_ifr, _ = get_path_alti(altidb, alt, conf=conf)
+    coloc_listing: dict[str, Any] = {}
     list_alti_in_raw_time_window = step_1_temp_match(
-        date_sar_dt=date,
+        date_sar_dt=datetime.datetime.strptime(day_analyzed, "%Y%m%d"),
         path_altimeters=path_altimeter,
         acro_alti=acronym_alti_path_ifr,
         altidb=altidb,
     )
-    if len(list_alti_in_raw_time_window) > 0:
+    ds_alti = None
+    tree_alti = None
+    if len(lst_wv_safe_sorted) and len(list_alti_in_raw_time_window) > 0:
         ds_alti, tree_alti = read_all_alti_files(
             liste_altimeter_files=list_alti_in_raw_time_window,
             altidatabase=altidb,
             conf=conf,
         )
     else:
-        ds_alti = None
-        tree_alti = None
         logger.info("no altimeter files found in the time window around the SAR SAFE")
     if len(lst_wv_safe_sorted) and ds_alti is not None and len(ds_alti["time"]) > 0:
+        sar_safes = get_sar_safes() if get_sar_safes is not None else {}
         all_safe_matchups = []
         pbar = tqdm(range(len(lst_wv_safe_sorted)), desc="WV SAFE")
         for ssi in pbar:
@@ -1126,8 +1247,9 @@ def core_coloc(
                 coloc_listing=coloc_listing,
                 cpt=cpt,
                 dev=dev,
-                progressbar=progressbar,
+                progressbar=False,
                 conf=conf,
+                sar_dataset_safe=sar_safes.get(safewv),
             )
             if len(one_safe_colocs.time_sar) > 0:
                 all_safe_matchups.append(one_safe_colocs)
@@ -1146,22 +1268,6 @@ def core_coloc(
             if output_file_written:
                 logger.info("successful save output file: %s", output_nc_file)
             if len(daily_colocated_observations["oswLon"]) > 0:
-                output_lst_file = os.path.join(
-                    outputdir,
-                    sarunit + "_" + alt,
-                    date.strftime("%Y"),
-                    "coloc_"
-                    + day_analyzed
-                    + "_"
-                    + sarunit
-                    + "_WV_"
-                    + alt
-                    + "_"
-                    + str(conf["delta_t_minutes"])
-                    + "_min_"
-                    + str(conf["delta_dist_km"])
-                    + "_km.lst",
-                )
                 write_coloc_listing(output_lst_file, coloc_listing, redo=redo)
     else:
         logger.info(
@@ -1169,6 +1275,232 @@ def core_coloc(
             day_analyzed,
         )
     return cpt
+
+
+def make_sar_getter(
+    lst_wv_safe_sorted: list[str], nproc: int
+) -> Callable[[], dict[str, xr.Dataset]]:
+    """Lazy, cached reader of the SAR measurements of a day.
+
+    Args:
+        lst_wv_safe_sorted: SAFE of the day.
+        nproc: Number of reader processes.
+
+    Returns:
+        Function returning the measurements, read at the first call only.
+    """
+    cache: dict[str, dict[str, xr.Dataset]] = {}
+
+    def get_sar_safes() -> dict[str, xr.Dataset]:
+        if "sar" not in cache:
+            cache["sar"] = load_sar_safes(lst_wv_safe_sorted, nproc=nproc)
+        return cache["sar"]
+
+    return get_sar_safes
+
+
+def prepare_alti(
+    alt: str, sarunit: str, outputdir: str, day_analyzed: str, conf: dict[str, Any]
+) -> str:
+    """Check the altimeter path and create the output directory.
+
+    Args:
+        alt: Altimeter name (e.g., 'cmems_SARAL').
+        sarunit: SAR mission (S1A, S1B...).
+        outputdir: Output directory.
+        day_analyzed: Date in YYYYMMDD format.
+        conf: Configuration dictionary.
+
+    Returns:
+        Path of the output NetCDF file.
+    """
+    path_altimeter, _, _ = get_path_alti(alt.split("_")[0], alt, conf=conf)
+    logger.info("path_altimeter : %s", path_altimeter)
+    assert os.path.exists(path_altimeter)
+    output_nc_file, _ = output_coloc_files(outputdir, sarunit, alt, day_analyzed, conf)
+    os.makedirs(os.path.dirname(output_nc_file), 0o0775, exist_ok=True)
+    return output_nc_file
+
+
+def core_coloc(
+    day_analyzed: str,
+    alt: str,
+    sarunit: str,
+    outputdir: str,
+    conf: dict[str, Any],
+    dev: bool = False,
+    redo: bool = False,
+    progressbar: bool = False,
+    nproc: int = 1,
+) -> defaultdict[str, int]:
+    """Core colocation routine for one altimeter.
+
+    Args:
+        day_analyzed: Date to analyze in YYYYMMDD format.
+        alt: Altimeter name (e.g., 'cmems_al').
+        sarunit: SAR mission (S1A, S1B).
+        outputdir: Output directory.
+        conf: Configuration dictionary.
+        dev: Development mode flag.
+        redo: If True, redo existing files.
+        progressbar: Kept for backward compatibility (the SAFE loop always
+            shows a tqdm bar).
+        nproc: Number of processes reading the SAR measurement files
+            (1 = sequential, SAFE by SAFE).
+
+    Returns:
+        Counter with statistics.
+    """
+    path_altimeter, _, _ = get_path_alti(alt.split("_")[0], alt, conf=conf)
+    logger.info("path_altimeter : %s", path_altimeter)
+    assert os.path.exists(path_altimeter)
+    lst_wv_safe_sorted = list_sar_safes(day_analyzed, sarunit, conf)
+    output_nc_file, _ = output_coloc_files(outputdir, sarunit, alt, day_analyzed, conf)
+    time.sleep(rng.integers(0, 10))
+    os.makedirs(os.path.dirname(output_nc_file), 0o0775, exist_ok=True)
+    if os.path.exists(output_nc_file) and redo is False:
+        logger.info("output coloc S1-WV alti file already exists (redo is False)")
+        sys.exit(0)
+    return coloc_one_alti(
+        day_analyzed,
+        alt,
+        sarunit,
+        outputdir,
+        conf,
+        lst_wv_safe_sorted,
+        make_sar_getter(lst_wv_safe_sorted, nproc) if nproc > 1 else None,
+        dev=dev,
+        redo=redo,
+    )
+
+
+def altimeters_of_day(day_analyzed: str, sarunit: str, alts: list[str]) -> list[str]:
+    """Keep the altimeters whose acquisition window overlaps the SAR one that day.
+
+    Args:
+        day_analyzed: Date in YYYYMMDD format.
+        sarunit: SAR mission (S1A, S1B...).
+        alts: Candidate altimeter names; ``["all"]`` means every altimeter.
+
+    Returns:
+        Altimeter names operating on that day.
+
+    Examples:
+        >>> altimeters_of_day("20200115", "S1A", ["cci_saral", "cci_ers-1"])
+        ['cci_saral']
+    """
+    if alts == ["all"]:
+        alts = all_altimeters()
+    day = datetime.datetime.strptime(day_analyzed, "%Y%m%d").date()
+    out = []
+    for alt in alts:
+        window = date_window_for(alt, sarunit)
+        if window is not None and window[0] <= day <= window[1]:
+            out.append(alt)
+    return out
+
+
+def core_coloc_day(
+    day_analyzed: str,
+    alts: list[str],
+    sarunit: str,
+    outputdir: str,
+    conf: dict[str, Any],
+    dev: bool = False,
+    redo: bool = False,
+    nproc: int = 8,
+) -> tuple[dict[str, defaultdict[str, int]], list[str]]:
+    """Colocate the WV of one day with several altimeters, reading the SAR once.
+
+    The WV measurement files (the bottleneck) are read once for all the
+    altimeters, with ``nproc`` reader processes. An altimeter whose output
+    already exists is skipped (unless ``redo``); a failure on one altimeter is
+    logged and does not stop the others.
+
+    Args:
+        day_analyzed: Date to analyze in YYYYMMDD format.
+        alts: Altimeter names (``["all"]`` = every altimeter operating that day).
+        sarunit: SAR mission (S1A, S1B...).
+        outputdir: Output directory.
+        conf: Configuration dictionary.
+        dev: Development mode flag.
+        redo: If True, redo existing files.
+        nproc: Number of processes reading the SAR measurement files.
+
+    Returns:
+        Tuple (counters per altimeter, altimeters that failed).
+    """
+    alts = altimeters_of_day(day_analyzed, sarunit, alts)
+    todo = [
+        alt
+        for alt in alts
+        if redo
+        or not os.path.exists(
+            output_coloc_files(outputdir, sarunit, alt, day_analyzed, conf)[0]
+        )
+    ]
+    logger.info(
+        "%s %s: %i altimeters operating, %i to process: %s",
+        day_analyzed,
+        sarunit,
+        len(alts),
+        len(todo),
+        todo,
+    )
+    counters: dict[str, defaultdict[str, int]] = {}
+    failed: list[str] = []
+    if not todo:
+        return counters, failed
+    lst_wv_safe_sorted = list_sar_safes(day_analyzed, sarunit, conf)
+    get_sar_safes = make_sar_getter(lst_wv_safe_sorted, nproc)
+    for alt in todo:
+        t0 = time.time()
+        try:
+            prepare_alti(alt, sarunit, outputdir, day_analyzed, conf)
+            counters[alt] = coloc_one_alti(
+                day_analyzed,
+                alt,
+                sarunit,
+                outputdir,
+                conf,
+                lst_wv_safe_sorted,
+                get_sar_safes,
+                dev=dev,
+                redo=redo,
+            )
+        except Exception:  # one altimeter must not stop the others
+            logger.exception("coloc failed for %s %s %s", day_analyzed, sarunit, alt)
+            failed.append(alt)
+        logger.info("%s done in %1.1f s", alt, time.time() - t0)
+    return counters, failed
+
+
+def parse_alts(values: list[str]) -> list[str]:
+    """Split and check the --alt values.
+
+    Args:
+        values: Values of --alt (space and/or comma separated).
+
+    Returns:
+        List of altimeter names, or ``["all"]``.
+
+    Raises:
+        ValueError: If an altimeter is unknown.
+
+    Examples:
+        >>> parse_alts(["cci_saral,cmems_SARAL"])
+        ['cci_saral', 'cmems_SARAL']
+        >>> parse_alts(["all"])
+        ['all']
+    """
+    alts = [aa for vv in values for aa in vv.split(",") if aa]
+    if "all" in alts:
+        return ["all"]
+    known = set(all_altimeters())
+    unknown = [aa for aa in alts if aa not in known]
+    if unknown:
+        raise ValueError(f"unknown altimeter(s) {unknown}, expected {sorted(known)}")
+    return alts
 
 
 def entrypoint() -> None:
@@ -1195,9 +1527,17 @@ def entrypoint() -> None:
     parser.add_argument(
         "--alt",
         required=True,
-        choices=["cmems_" + kk for kk in POSSIBLES_CMEMS_ALTI]
-        + ["cci_" + kk for kk in POSSIBLES_CCI_ALTI],
-        help="cmems_al,cmems_c2,cci_jason-3...",
+        nargs="+",
+        help="one or several altimeters (space or comma separated): "
+        "cmems_SARAL cci_jason-3..., or 'all' (every altimeter operating that "
+        "day). With several altimeters the WV files are read once for all.",
+    )
+    parser.add_argument(
+        "--nproc",
+        type=int,
+        default=8,
+        help="number of processes reading the WV measurement files (I/O bound: "
+        "useful even on a 1-CPU job) [default=8]",
     )
     parser.add_argument(
         "--redo",
@@ -1240,19 +1580,39 @@ def entrypoint() -> None:
     )
     logger.info("development/test mode activated: %s", args.dev)
     config = get_conf_content(args.config)
-    cpt = core_coloc(
-        sarunit=args.sat,
-        alt=args.alt,
-        outputdir=args.outputdir,
-        dev=args.dev,
-        day_analyzed=args.startdate,
-        redo=args.redo,
-        progressbar=args.progressbar,
-        conf=config,
-    )
+    alts = parse_alts(args.alt)
+    failed: list[str] = []
+    if len(alts) == 1 and alts != ["all"]:
+        cpt = core_coloc(
+            sarunit=args.sat,
+            alt=alts[0],
+            outputdir=args.outputdir,
+            dev=args.dev,
+            day_analyzed=args.startdate,
+            redo=args.redo,
+            progressbar=args.progressbar,
+            conf=config,
+            nproc=args.nproc,
+        )
+        logger.info("counters: %s", cpt)
+    else:
+        counters, failed = core_coloc_day(
+            day_analyzed=args.startdate,
+            alts=alts,
+            sarunit=args.sat,
+            outputdir=args.outputdir,
+            conf=config,
+            dev=args.dev,
+            redo=args.redo,
+            nproc=args.nproc,
+        )
+        for alt, cpt in counters.items():
+            logger.info("counters %s: %s", alt, dict(cpt))
     logger.info("memory in Mo: %s", getrusage(RUSAGE_SELF).ru_maxrss / 1000.0)
-    logger.info("counters: %s", cpt)
     logger.info("analysis done in %1.1f sec", time.time() - tinit)
+    if failed:
+        logger.error("coloc failed for: %s", failed)
+        sys.exit(1)
     logger.info("end.")
 
 

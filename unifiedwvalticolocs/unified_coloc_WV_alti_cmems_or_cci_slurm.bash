@@ -32,6 +32,7 @@ OUTPUTDIR=""
 REDO=""
 DEV=""
 CONFIG=""
+NPROC=""
 
 # Function to display help
 usage() {
@@ -40,12 +41,14 @@ usage() {
     echo "Required Arguments:"
     echo "  -d, --startdate DATE   The start date for processing (e.g., 20240101)"
     echo "  -s, --sat SATELLITE    The satellite name"
-    echo "  -a, --alt ALTIMETER    The altimeter name"
+    echo "  -a, --alt ALTIMETER    The altimeter name, a comma-separated list,"
+    echo "                         or 'all' (one task per day: WV files read once)"
     echo "  -o, --outputdir DIR    The directory where results will be saved"
     echo "  -c, --config FILE      Path to the YAML config file"
     echo ""
     echo "Options:"
     echo "  -i, --image SIF_FILE   Path to the SIF image (default: $IMAGNAME)"
+    echo "  -n, --nproc N          Processes reading the WV files (default: 8)"
     echo "  --redo                 Enable overwrite mode (forces reprocessing)"
     echo "  --dev                  Enable developer mode"
     echo "  -h, --help             Show this help message and exit"
@@ -67,6 +70,7 @@ while [[ $# -gt 0 ]]; do
         -o|--outputdir) OUTPUTDIR="$2"; shift 2 ;;
         -c|--config)    CONFIG="$2";    shift 2 ;;
         -i|--image)     IMAGNAME="$2";  shift 2 ;;
+        -n|--nproc)     NPROC="--nproc $2"; shift 2 ;;
         --redo)         REDO="--redo";  shift 1 ;;
         --dev)          DEV="--dev";    shift 1 ;;
         -h|--help)      usage;          exit 0 ;;
@@ -101,6 +105,7 @@ apptainer $optssimg "$IMAGNAME" procunifiedwvalticolocs \
     --sat "$SAT" \
     --alt "$ALT" \
     --config "$CONFIG" \
+    $NPROC \
     $REDO \
     $DEV
 

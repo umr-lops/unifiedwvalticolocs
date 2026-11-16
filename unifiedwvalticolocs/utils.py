@@ -80,11 +80,11 @@ def _d(year: int, month: int, day: int) -> datetime.date:
     return datetime.date(year, month, day)
 
 
-# Sentinel-1 WV OCN Level-2: commissioning date per mission. Stop = today
-# (the missions are all operational).
+# Sentinel-1 WV OCN Level-2: commissioning date per mission; stop=None means
+# operational (window capped at "today"). S1B failed on 2021-12-23.
 SAR_MISSION_DATES: dict[str, tuple[datetime.date, datetime.date | None]] = {
     "S1A": (_d(2014, 4, 4), None),
-    "S1B": (_d(2016, 4, 25), None),
+    "S1B": (_d(2016, 4, 25), _d(2021, 12, 23)),
     "S1C": (_d(2025, 5, 16), None),
     "S1D": (_d(2026, 1, 7), None),
 }
