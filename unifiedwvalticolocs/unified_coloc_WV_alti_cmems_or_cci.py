@@ -850,19 +850,29 @@ def preprocess_wv_s1_ocn(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-def read_one_measurement_wv(measurement_file: str) -> xr.Dataset:
+def read_one_measurement_wv(measurement_file: str) -> xr.Dataset | None:
     """Open, preprocess and load one S1 WV OCN measurement file.
 
-    Module-level function so that it can run in a worker process.
+    Module-level function so that it can run in a worker process. An
+    unreadable file (e.g. the 0-byte measurement found in
+    S1A_WV_OCN__2SSV_20180326T075732_..._5653.SAFE) is skipped with a
+    warning instead of making every altimeter of the day fail.
 
     Args:
         measurement_file: Path to a ``measurement/*.nc`` file of a WV SAFE.
 
     Returns:
-        Preprocessed dataset loaded in memory (file closed).
+        Preprocessed dataset loaded in memory (file closed), or None if the
+        file cannot be read.
     """
-    with xr.open_dataset(measurement_file) as ds:
-        return preprocess_wv_s1_ocn(ds).load()
+    try:
+        with xr.open_dataset(measurement_file) as ds:
+            return preprocess_wv_s1_ocn(ds).load()
+    except (OSError, ValueError) as exc:
+        logger.warning(
+            "unreadable WV measurement %s skipped: %r", measurement_file, exc
+        )
+        return None
 
 
 def list_measurements_wv(safewv: str) -> list[str]:
@@ -914,21 +924,25 @@ def drop_duplicated_time_sar(sar_dataset_safe: xr.Dataset, safewv: str) -> xr.Da
     return sar_dataset_safe
 
 
-def concat_measurements_wv(safewv: str, measurements: list[xr.Dataset]) -> xr.Dataset:
+def concat_measurements_wv(
+    safewv: str, measurements: list[xr.Dataset | None]
+) -> xr.Dataset:
     """Concatenate the preprocessed measurements of one SAFE.
 
     Args:
         safewv: Path to the SAFE (for the log).
-        measurements: Preprocessed measurement datasets.
+        measurements: Preprocessed measurement datasets (None for the
+            unreadable files, ignored).
 
     Returns:
         Dataset along ``time_sar`` (unique index, see
         ``drop_duplicated_time_sar``); an empty dataset if there is no
         measurement.
     """
-    if measurements:
+    readable = [ds for ds in measurements if ds is not None]
+    if readable:
         return drop_duplicated_time_sar(
-            xr.concat(measurements, dim="time_sar").load(), safewv
+            xr.concat(readable, dim="time_sar").load(), safewv
         )
     # A SAFE with no measurement/*.nc (corrupt/partial download) must not
     # crash xr.concat([]) (issue #52); skip it with an empty SAR dataset.
