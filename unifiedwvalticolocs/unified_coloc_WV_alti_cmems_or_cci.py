@@ -332,6 +332,33 @@ def preproc_cciseastate_alti_files(ds: xr.Dataset) -> tuple[xr.Dataset, float]:
     return ds, pct_good
 
 
+def drop_extra_coords(ds: xr.Dataset, keep: tuple[str, ...]) -> xr.Dataset:
+    """Drop the coordinates that are not in ``keep``.
+
+    Some CCI sea state v5 files (e.g. part of the SWOT ones) carry an extra
+    ``z`` coordinate (ERA5 geopotential left over from the GRIB processing)
+    that the other files of the same day do not have, which makes
+    ``xr.concat`` fail with ``coordinate 'z' not present in all datasets``.
+
+    Args:
+        ds: Altimeter dataset.
+        keep: Names of the coordinates to keep.
+
+    Returns:
+        Dataset without the other coordinates.
+
+    Examples:
+        >>> ds = xr.Dataset(coords={"time": [0, 1], "z": ("time", [1.0, 2.0])})
+        >>> list(drop_extra_coords(ds, ("time",)).coords)
+        ['time']
+    """
+    extra = [c for c in ds.coords if c not in keep]
+    if extra:
+        logger.debug("dropping extra coordinates %s", extra)
+        ds = ds.drop_vars(extra)
+    return ds
+
+
 def read_all_alti_files(
     liste_altimeter_files: list[str],
     altidatabase: str,
@@ -360,6 +387,7 @@ def read_all_alti_files(
     else:
         raise ValueError(error_altidb % altidatabase)
 
+    fctpreprocess: Callable[[xr.Dataset], tuple[xr.Dataset, Any]]
     if altidatabase == "cmems":
         fctpreprocess = preproc_cmems_alti_files
     else:
@@ -372,6 +400,7 @@ def read_all_alti_files(
         if ii == 0:
             logger.info("example of altimeter file used: %s", liste_altimeter_files[ii])
         tmpds, pct_good = fctpreprocess(xr.open_dataset(liste_altimeter_files[ii]))
+        tmpds = drop_extra_coords(tmpds, ("time", lon_varname, lat_varname))
         all_pct_good.append(pct_good)
         if len(tmpds["time"]) > 0:
             counter["total_alti_file_with_data"] += 1
@@ -529,7 +558,7 @@ def window_hs_statistics(hs: np.ndarray) -> dict[str, float | int]:
         >>> s = window_hs_statistics(np.array([1.0, 2.0, 3.0, np.nan]))
         >>> s["mean"], s["median"], s["count"]
         (2.0, 2.0, 3)
-        >>> np.isnan(window_hs_statistics(np.array([1.0]))["std"])
+        >>> bool(np.isnan(window_hs_statistics(np.array([1.0]))["std"]))
         True
     """
     values = np.asarray(hs, dtype="float64").ravel()
