@@ -15,7 +15,14 @@ space and time:
 3. **Geographic matching** — for each WV measurement, keep altimeter points
    within ``delta_dist_km`` (Haversine distance) (``step_2``).
 4. **Temporal matching** — among the geographic matches, keep points within
-   ``delta_t_minutes`` of the WV measurement time (``step_3``).
+   ``delta_t_minutes`` of the WV measurement time (``step_3``). The point
+   closest in time gives ``hs_alti_closest`` (with ``delta_t_closest`` and
+   ``delta_d_closest``). All the points of the space/time window are also
+   summarized, so that the altimeter sea state is representative of a sea
+   surface comparable to the WV imagette (a track segment up to
+   2 × ``delta_dist_km`` long instead of a single 1 Hz point):
+   ``hs_alti_mean``, ``hs_alti_median``, ``hs_alti_std`` (ddof=1, NaN with
+   fewer than 2 points) and ``hs_alti_count`` (number of finite Hs values).
 5. **Merge & save** — merge the matched altimeter variables (e.g.
    ``swh_denoised`` for CCI, ``VAVH`` for CMEMS) with the WV variables into
    one Dataset and write the daily NetCDF plus a ``.lst`` file listing the
