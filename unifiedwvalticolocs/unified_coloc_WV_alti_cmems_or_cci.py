@@ -495,10 +495,13 @@ def get_distances_v2(
 
 
 WINDOW_HS_STATS = {
-    "hs_alti_mean": ("mean", "mean"),
-    "hs_alti_median": ("median", "median"),
-    "hs_alti_std": ("std", "standard deviation (ddof=1, NaN if count < 2)"),
-    "hs_alti_count": ("count", "number of finite"),
+    "hs_alti_mean": ("mean", "mean of the altimeter Hs"),
+    "hs_alti_median": ("median", "median of the altimeter Hs"),
+    "hs_alti_std": (
+        "std",
+        "standard deviation (ddof=1, NaN if count < 2) of the altimeter Hs",
+    ),
+    "hs_alti_count": ("count", "number of finite altimeter Hs values"),
 }
 
 
@@ -561,9 +564,8 @@ def add_window_hs_statistics(
         subset_ok_match_alti[name] = xr.DataArray(
             np.array(stats[key], dtype=dtype), dims=()
         )
-        what = "altimeter Hs values" if key == "count" else "altimeter Hs"
         subset_ok_match_alti[name].attrs = {
-            "description": f"{txt} of the {what} {window}",
+            "description": f"{txt} {window}",
             "original_variable_name": swh_varname,
         }
         if key != "count":
