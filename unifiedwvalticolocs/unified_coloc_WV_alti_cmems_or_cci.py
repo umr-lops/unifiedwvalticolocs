@@ -494,26 +494,113 @@ def get_distances_v2(
     return all_dists
 
 
+WINDOW_HS_STATS = {
+    "hs_alti_mean": ("mean", "mean of the altimeter Hs"),
+    "hs_alti_median": ("median", "median of the altimeter Hs"),
+    "hs_alti_std": (
+        "std",
+        "standard deviation (ddof=1, NaN if count < 2) of the altimeter Hs",
+    ),
+    "hs_alti_count": ("count", "number of finite altimeter Hs values"),
+}
+
+
+def window_hs_statistics(hs: np.ndarray) -> dict[str, float | int]:
+    """Summarize the altimeter Hs of all the points of the colocation window.
+
+    The points within ``delta_dist_km`` and ``delta_t_minutes`` of a WV
+    imagette sample the sea state over a track segment (up to
+    2 * ``delta_dist_km`` long) instead of the single closest point.
+
+    Args:
+        hs: Altimeter significant wave heights of the window (NaN ignored).
+
+    Returns:
+        Dictionary with the keys mean, median, std (ddof=1) and count.
+
+    Examples:
+        >>> s = window_hs_statistics(np.array([1.0, 2.0, 3.0, np.nan]))
+        >>> s["mean"], s["median"], s["count"]
+        (2.0, 2.0, 3)
+        >>> np.isnan(window_hs_statistics(np.array([1.0]))["std"])
+        True
+    """
+    values = np.asarray(hs, dtype="float64").ravel()
+    values = values[np.isfinite(values)]
+    count = int(values.size)
+    return {
+        "mean": float(np.mean(values)) if count else np.nan,
+        "median": float(np.median(values)) if count else np.nan,
+        "std": float(np.std(values, ddof=1)) if count > 1 else np.nan,
+        "count": count,
+    }
+
+
+def add_window_hs_statistics(
+    subset_ok_match_alti: xr.Dataset,
+    window_alti: xr.Dataset,
+    swh_varname: str,
+    delta_t_max_minutes: float,
+    delta_dist_km: float | None = None,
+) -> xr.Dataset:
+    """Add the Hs statistics of the colocation window to the matchup.
+
+    Args:
+        subset_ok_match_alti: Matchup (closest point) dataset, 0-d.
+        window_alti: All the altimeter points within the space/time window.
+        swh_varname: Name of the Hs variable in ``window_alti``.
+        delta_t_max_minutes: Time window in minutes (for the metadata).
+        delta_dist_km: Space window in km (for the metadata), if known.
+
+    Returns:
+        The matchup dataset with hs_alti_mean / median / std / count.
+    """
+    stats = window_hs_statistics(window_alti[swh_varname].values)
+    radius = f"{delta_dist_km:g} km and " if delta_dist_km is not None else ""
+    window = f"within {radius}{delta_t_max_minutes:g} min of the WV imagette"
+    units = window_alti[swh_varname].attrs.get("units", "m")
+    for name, (key, txt) in WINDOW_HS_STATS.items():
+        dtype = "int32" if key == "count" else "float32"
+        subset_ok_match_alti[name] = xr.DataArray(
+            np.array(stats[key], dtype=dtype), dims=()
+        )
+        subset_ok_match_alti[name].attrs = {
+            "description": f"{txt} {window}",
+            "original_variable_name": swh_varname,
+        }
+        if key != "count":
+            subset_ok_match_alti[name].attrs["units"] = units
+    return subset_ok_match_alti
+
+
 def step_3_closer_temp_match(
     sar_dataset: xr.Dataset,
     subset_alti: xr.Dataset,
     delta_t_max_minutes: int,
     altidb: str,
     cpt: defaultdict,
+    delta_dist_km: float | None = None,
 ) -> tuple[xr.Dataset | None, np.ndarray, defaultdict, xr.Dataset]:
     """Find altimeter points within the time window around SAR-WV acquisition.
 
+    The matchup keeps the altimeter point closest in time (``hs_alti_closest``)
+    and adds the mean, median, standard deviation and number of the Hs values
+    of all the points within the space and time window
+    (``hs_alti_mean``, ``hs_alti_median``, ``hs_alti_std``, ``hs_alti_count``).
+
     Args:
         sar_dataset: WV dataset.
-        subset_alti: Subset of the initial altimeter dataset.
+        subset_alti: Subset of the initial altimeter dataset (space window).
         delta_t_max_minutes: Time window in minutes.
         altidb: 'cci' or 'cmems'.
         cpt: Counter.
+        delta_dist_km: Space window in km, only written in the metadata.
 
     Returns:
-        Tuple of matching altimeter dataset (closest point), array of matching
-        altimeter filenames, updated counter, and the dataset of all altimeter
-        points within the time and space criteria.
+        Tuple of matching altimeter dataset (closest point and window
+        statistics), array of matching altimeter filenames, updated counter,
+        and the dataset of all altimeter points within the time and space
+        criteria.
     """
     swh_varname = VAR_NAMES[altidb]["swh_varname"]
     lon_varname = VAR_NAMES[altidb]["lon_varname"]
@@ -553,6 +640,13 @@ def step_3_closer_temp_match(
             "description"
         ] = "delta distance altimeter-SAR for the closest altimeter point in time among the subset matching the coloc criteria"
         subset_ok_match_alti["delta_d_closest"].attrs["units"] = "km"
+        subset_ok_match_alti = add_window_hs_statistics(
+            subset_ok_match_alti,
+            subset_ok_match_alti_all_time_and_space,
+            swh_varname,
+            delta_t_max_minutes,
+            delta_dist_km,
+        )
         subset_ok_match_alti = subset_ok_match_alti.rename(
             {
                 swh_varname: "hs_alti_closest",
@@ -768,6 +862,7 @@ def treat_one_measurement_wv(
             delta_t_max_minutes=conf["delta_t_minutes"],
             altidb=altidb,
             cpt=cpt,
+            delta_dist_km=conf["delta_dist_km"],
         )
         if len(list_alti_files_timespace_mu) > 0:
             coloc_listing[fullpath_l2_wv_ocn] = list_alti_files_timespace_mu

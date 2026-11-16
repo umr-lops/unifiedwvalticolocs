@@ -20,6 +20,7 @@ from unifiedwvalticolocs.unified_coloc_WV_alti_cmems_or_cci import (
     step_1_temp_match,
     step_2_geographic_match,
     step_3_closer_temp_match,
+    window_hs_statistics,
 )
 from unifiedwvalticolocs.utils import all_altimeters
 
@@ -279,6 +280,48 @@ class TestSteps:
 
         assert subset_ok is not None
         assert np.all(subset_ok["delta_t_closest"].values == np.timedelta64(0, "s"))
+
+    def test_step_3_window_hs_statistics(self):
+        """All points in the space/time window are summarized, not only the
+        closest one; points outside the time window are ignored."""
+        t0 = np.datetime64("2022-01-01T12:00:00")
+        dts = np.array([-2, -1, 0, 1, 2, 60], dtype="timedelta64[m]")
+        ds_alti = xr.Dataset(
+            {
+                "latitude": (("time",), np.full(6, 10.0)),
+                "longitude": (("time",), 10.0 + 0.01 * np.arange(6)),
+                "VAVH": (("time",), [1.0, 2.0, 3.0, np.nan, 5.0, 50.0]),
+                "fname": (("time",), ["f.nc"] * 6),
+            },
+            coords={"time": t0 + dts},
+        )
+        ds_alti["VAVH"].attrs["units"] = "m"
+        ds_sar = xr.Dataset(
+            {"oswLat": (("time_sar",), [10.0]), "oswLon": (("time_sar",), [10.0])},
+            coords={"time_sar": [t0]},
+        )
+        subset_ok, _, _, window = step_3_closer_temp_match(
+            sar_dataset=ds_sar,
+            subset_alti=ds_alti,
+            delta_t_max_minutes=25,
+            altidb="cmems",
+            cpt=defaultdict(int),
+            delta_dist_km=30,
+        )
+        assert len(window["time"]) == 5
+        assert np.isclose(subset_ok["hs_alti_closest"].values, 3.0)
+        assert np.isclose(subset_ok["hs_alti_mean"].values, 2.75)
+        assert np.isclose(subset_ok["hs_alti_median"].values, 2.5)
+        assert np.isclose(subset_ok["hs_alti_std"].values, np.std([1, 2, 3, 5], ddof=1))
+        assert int(subset_ok["hs_alti_count"].values) == 4
+        assert subset_ok["hs_alti_mean"].attrs["units"] == "m"
+        assert "30 km and 25 min" in subset_ok["hs_alti_count"].attrs["description"]
+
+    def test_window_hs_statistics_empty(self):
+        """Only NaN values: count 0 and NaN statistics."""
+        s = window_hs_statistics(np.array([np.nan, np.nan]))
+        assert s["count"] == 0
+        assert np.isnan(s["mean"]) and np.isnan(s["median"]) and np.isnan(s["std"])
 
     def test_step_3_invalid_altidb(self, mock_sar_ds, mock_alti_ds):
         """Unknown altidb raises a KeyError (VAR_NAMES lookup)."""
