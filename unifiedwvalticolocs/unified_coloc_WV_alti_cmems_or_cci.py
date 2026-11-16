@@ -877,6 +877,43 @@ def list_measurements_wv(safewv: str) -> list[str]:
     return glob.glob(os.path.join(safewv, "measurement", "*.nc"))
 
 
+def drop_duplicated_time_sar(sar_dataset_safe: xr.Dataset, safewv: str) -> xr.Dataset:
+    """Remove the WV measurements whose ``time_sar`` is not unique in the SAFE.
+
+    Some early S1A WV OCN SAFEs (2014-2015) last 3 s but hold ~100
+    imagettes that all have the same ``time_sar``: their time is meaningless
+    for a 25 min colocation, and the non-unique index made the final
+    ``.sel(time_sar=...)`` fail, losing the whole altimeter for the day.
+    Every measurement sharing its time with another one is dropped.
+
+    Args:
+        sar_dataset_safe: Measurements of one SAFE (dimension ``time_sar``).
+        safewv: Path of the SAFE (for the log).
+
+    Returns:
+        Dataset with a unique ``time_sar`` index.
+
+    Examples:
+        >>> t = np.array(["2014-11-13T03:42:12"] * 2 + ["2014-11-13T03:42:20"],
+        ...              dtype="datetime64[ns]")
+        >>> ds = xr.Dataset({"x": ("time_sar", [1, 2, 3])}, coords={"time_sar": t})
+        >>> drop_duplicated_time_sar(ds, "a.SAFE")["x"].values.tolist()
+        [3]
+    """
+    if "time_sar" not in sar_dataset_safe.indexes:
+        return sar_dataset_safe
+    dup = sar_dataset_safe.indexes["time_sar"].duplicated(keep=False)
+    if dup.any():
+        logger.warning(
+            "%d of %d WV measurements dropped (non unique time_sar) in %s",
+            dup.sum(),
+            dup.size,
+            os.path.basename(safewv),
+        )
+        sar_dataset_safe = sar_dataset_safe.isel(time_sar=np.flatnonzero(~dup))
+    return sar_dataset_safe
+
+
 def concat_measurements_wv(safewv: str, measurements: list[xr.Dataset]) -> xr.Dataset:
     """Concatenate the preprocessed measurements of one SAFE.
 
@@ -885,10 +922,14 @@ def concat_measurements_wv(safewv: str, measurements: list[xr.Dataset]) -> xr.Da
         measurements: Preprocessed measurement datasets.
 
     Returns:
-        Dataset along ``time_sar``; an empty dataset if there is no measurement.
+        Dataset along ``time_sar`` (unique index, see
+        ``drop_duplicated_time_sar``); an empty dataset if there is no
+        measurement.
     """
     if measurements:
-        return xr.concat(measurements, dim="time_sar").load()
+        return drop_duplicated_time_sar(
+            xr.concat(measurements, dim="time_sar").load(), safewv
+        )
     # A SAFE with no measurement/*.nc (corrupt/partial download) must not
     # crash xr.concat([]) (issue #52); skip it with an empty SAR dataset.
     logger.warning("no measurement/*.nc found in SAFE %s - skipping", safewv)
