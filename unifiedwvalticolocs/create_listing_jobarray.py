@@ -87,6 +87,21 @@ def argument_parser():
         help="List of SAR units to process (e.g., --sar-units S1A S1B) [default is all S1 units]",
     )
     parser.add_argument(
+        "--per-day",
+        action="store_true",
+        default=False,
+        help="one task per (day, SAR unit) colocating all the chosen altimeters "
+        "(the WV files are read once instead of once per altimeter) "
+        "[default is one task per (day, SAR unit, altimeter)]",
+    )
+    parser.add_argument(
+        "--nproc",
+        type=int,
+        default=None,
+        help="number of processes reading the WV files, passed to each task "
+        "[optional, default: the one of the coloc script]",
+    )
+    parser.add_argument(
         "--output-type",
         required=True,
         choices=["csv", "txt"],
@@ -171,12 +186,28 @@ def create_listing_jobarray(args):
             else datetime.datetime.now()
         )
 
+    per_day = getattr(args, "per_day", False)
+    nproc = getattr(args, "nproc", None)
+    if per_day:
+        # one task per (day, SAR unit): the coloc script skips the altimeters
+        # not operating that day, and those already processed
+        alt_value = (
+            "all" if sorted(alti_chosen) == sorted(all_altis) else ",".join(alti_chosen)
+        )
+        groups = [(sarunit, alti_chosen, alt_value) for sarunit in args.sar_units]
+    else:
+        groups = [
+            (sarunit, [satalti], satalti)
+            for sarunit in args.sar_units
+            for satalti in alti_chosen
+        ]
     if args.output_type == "txt":
         fid = open(listing, "w")
     cpt = 0
     lines_4_csv = []
-    for sarunit in args.sar_units:
-        for satalti in alti_chosen:
+    for sarunit, altis_group, alt_value in groups:
+        days = set()
+        for satalti in altis_group:
             if explicit_dates:
                 sta, sto = sta_default, sto_default
             else:
@@ -193,37 +224,40 @@ def create_listing_jobarray(args):
                 sta = datetime.datetime.combine(window[0], datetime.time())
                 # rrule until= is inclusive: the window end is generated as-is.
                 sto = datetime.datetime.combine(window[1], datetime.time())
-            for dd in rrule.rrule(rrule.DAILY, dtstart=sta, until=sto):
-                if args.output_type == "csv":
-                    lines_4_csv.append(
-                        (
-                            dd.strftime("%Y%m%d"),
-                            sarunit,
-                            satalti,
-                            outputdir,
-                            args.image,
-                            config_path,
-                        )
+            days.update(rrule.rrule(rrule.DAILY, dtstart=sta, until=sto))
+        for dd in sorted(days):
+            if args.output_type == "csv":
+                lines_4_csv.append(
+                    (
+                        dd.strftime("%Y%m%d"),
+                        sarunit,
+                        alt_value,
+                        outputdir,
+                        args.image,
+                        config_path,
                     )
-                elif args.output_type == "txt":
-                    cmd_line = (
-                        "--startdate %s --sat %s --alt %s --outputdir %s --image %s --config %s"
-                        % (
-                            dd.strftime("%Y%m%d"),
-                            sarunit,
-                            satalti,
-                            outputdir,
-                            args.image,
-                            config_path,
-                        )
+                )
+            elif args.output_type == "txt":
+                cmd_line = (
+                    "--startdate %s --sat %s --alt %s --outputdir %s --image %s --config %s"
+                    % (
+                        dd.strftime("%Y%m%d"),
+                        sarunit,
+                        alt_value,
+                        outputdir,
+                        args.image,
+                        config_path,
                     )
-                    if args.overwrite:
-                        cmd_line += " --redo"
-                    fid.write(cmd_line + "\n")
-                else:
-                    raise ValueError("Invalid output type. Use 'csv' or 'txt'.")
+                )
+                if nproc:
+                    cmd_line += " --nproc %i" % nproc
+                if args.overwrite:
+                    cmd_line += " --redo"
+                fid.write(cmd_line + "\n")
+            else:
+                raise ValueError("Invalid output type. Use 'csv' or 'txt'.")
 
-                cpt += 1
+            cpt += 1
     if args.output_type == "txt":
         fid.close()
     if args.output_type == "csv":
