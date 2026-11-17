@@ -22,7 +22,7 @@ set -e
 optssimg="exec -B /scale/reference/ -B /legacy/project/cersat/public -B /scratch -B /ontap"
 
 # Default value for image
-IMAGNAME="/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post4.sif"
+IMAGNAME="/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.11.16.sif"
 
 # Default values
 STARTDATE=""

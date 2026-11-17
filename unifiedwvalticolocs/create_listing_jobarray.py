@@ -21,7 +21,7 @@ DEFAULT_OUTD = {
     "ice": os.path.join("/home1/scratch/", username, "unified_WV_alti_colocs"),
     "hpc": os.path.join("/scratch/", username, "unified_WV_alti_colocs"),
 }
-DEFAULT_SIF = "/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post4.sif"
+DEFAULT_SIF = "/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.11.16.sif"
 DEFAULT_CONFIG = {
     "ice": "/scale/project/lops-siam-airflow/configs_exploit/unifiedwvalticolocs/ice_prod_config.yml",
     "hpc": "/scale/project/lops-siam-airflow/configs_exploit/unifiedwvalticolocs/hpc_prod_config.yml",
