@@ -13,7 +13,7 @@ from unifiedwvalticolocs.create_listing_jobarray import (
 
 prunexe = "/appli/prun/bin/prun"
 DEFAULT_OUTD = "/home1/scratch/satwave/unified_WV_alti_colocs"
-DEFAULT_SIF = "/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.1.30.post4.sif"
+DEFAULT_SIF = "/scale/project/lops-siam-airflow/envs_exploit/apptainer/unifiedwvalticolocs_2026.11.16.sif"
 DEFAULT_CONFIG = "/scale/project/lops-siam-airflow/configs_exploit/unifiedwvalticolocs/ice_prod_config.yml"
 
 all_altis = [
